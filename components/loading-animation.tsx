@@ -8,7 +8,6 @@ export default function LoadingAnimation() {
   const [showAnimation, setShowAnimation] = useState(true)
   const [animationPhase, setAnimationPhase] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
-  const searchBarPositionRef = useRef<HTMLDivElement>(null)
   
   // Enhanced progress tracking with multiple phases
   const [progress, setProgress] = useState(0)
@@ -18,7 +17,6 @@ export default function LoadingAnimation() {
   const PATTERN_DURATION = 2000
   const SPHERE_DURATION = 2200
   const FULLSCREEN_DURATION = 2400
-  const BAR_DURATION = 2000
   const BACKGROUND_TRANSITION = 1800
 
   // Track animation frame for cleanup
@@ -46,7 +44,7 @@ export default function LoadingAnimation() {
     }
   }, [])
 
-  // Main animation sequence
+  // Main animation sequence - MODIFIED for smoother transitions
   useEffect(() => {
     // Animation sequence with smoother phase transitions
     const totalDuration = 10000 // 10 seconds total animation
@@ -57,17 +55,15 @@ export default function LoadingAnimation() {
       const newProgress = Math.min(elapsed / totalDuration, 1)
       setProgress(newProgress)
 
-      // Update animation phase based on progress
-      if (newProgress < 0.2) {
+      // Update animation phase based on progress - MODIFIED to skip bar phase
+      if (newProgress < 0.25) {
         setAnimationPhase(0) // Pattern phase
-      } else if (newProgress < 0.4) {
+      } else if (newProgress < 0.5) {
         setAnimationPhase(1) // Sphere phase
-      } else if (newProgress < 0.6) {
-        setAnimationPhase(2) // Fullscreen phase
       } else if (newProgress < 0.8) {
-        setAnimationPhase(3) // Bar phase
+        setAnimationPhase(2) // Fullscreen phase
       } else if (newProgress < 1) {
-        setAnimationPhase(4) // Background transition phase
+        setAnimationPhase(4) // Background transition phase - SKIP phase 3 (bar)
       } else {
         setShowAnimation(false)
       }
@@ -135,32 +131,30 @@ export default function LoadingAnimation() {
       ${interpolateColor("#93c5fd", "#ffc2e7", colorProgress)} 100%)`,
   }
 
-  const barGradient = {
-    background: `linear-gradient(to right, 
-      ${interpolateColor("#ffa6d9", "#60a5fa", colorProgress)} 0%, 
-      ${interpolateColor("#60a5fa", "#ffa6d9", colorProgress)} 100%)`,
-    boxShadow: `0 0 ${15 + Math.sin(colorProgress * Math.PI * 4) * 10}px ${interpolateColor("#60a5fa", "#ffa6d9", colorProgress)}`,
-  }
-
   // Particle effect for pattern phase
   const ParticleEffect = () => {
-    const particleCount = 20
+    const particleCount = 30 // Increased particle count for more visual interest
     const particles = Array.from({ length: particleCount }).map((_, i) => ({
       id: i,
       scale: 0.2 + Math.random() * 0.8,
-      x: Math.random() * 200 - 100,
-      y: Math.random() * 200 - 100,
+      x: Math.random() * 250 - 125, // Wider distribution
+      y: Math.random() * 250 - 125, // Wider distribution
       rotation: Math.random() * 360,
       opacity: 0.3 + Math.random() * 0.7,
-      delay: Math.random() * 1,
+      delay: Math.random() * 1.5, // Varied delays
+      duration: 2 + Math.random() * 1.5, // Varied durations
     }))
 
     return (
-      <div className="absolute w-32 h-32 z-0">
+      <div className="absolute w-full h-full z-0">
         {particles.map((particle) => (
           <motion.div
             key={particle.id}
             className="absolute w-3 h-3 rounded-full bg-white"
+            style={{
+              width: 2 + Math.random() * 4, // Varied sizes
+              height: 2 + Math.random() * 4, // Varied sizes
+            }}
             initial={{ 
               x: 0, 
               y: 0, 
@@ -176,7 +170,7 @@ export default function LoadingAnimation() {
               rotate: particle.rotation 
             }}
             transition={{ 
-              duration: 2 + particle.delay, 
+              duration: particle.duration, 
               ease: "easeOut",
               delay: particle.delay,
               repeat: Infinity,
@@ -203,28 +197,19 @@ export default function LoadingAnimation() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.5 }}
         >
-          {/* Invisible element to measure search bar position */}
-          <div className="absolute inset-0 pointer-events-none opacity-0 flex flex-col">
-            <div className="flex-1 flex flex-col items-center justify-center px-4">
-              <div className="flex flex-col items-center max-w-xl w-full">
-                <div ref={searchBarPositionRef} className="w-full max-w-[500px] h-12 mt-32"></div>
-              </div>
-            </div>
-          </div>
-
-          {/* Pattern with particles */}
+          {/* Pattern with particles - ENHANCED TRANSITION */}
           <motion.div
-            className={`absolute w-40 h-40 z-10 ${animationPhase > 0 ? 'pointer-events-none' : ''}`}
+            className="absolute w-40 h-40 z-10"
             initial={{ opacity: 0, scale: 0.2, rotate: -30 }}
             animate={{ 
-              opacity: animationPhase === 0 ? 1 : 0, 
-              scale: animationPhase === 0 ? 1 : 0.5,
-              rotate: animationPhase === 0 ? 360 : 0
+              opacity: animationPhase === 0 ? 1 : animationPhase === 1 ? 0.7 : 0, 
+              scale: animationPhase === 0 ? 1 : animationPhase === 1 ? 0.9 : 0.5,
+              rotate: animationPhase === 0 ? 360 : animationPhase === 1 ? 180 : 0
             }}
             transition={{ 
-              opacity: { duration: PATTERN_DURATION / 1000 * 0.5, ease: "easeInOut" },
-              scale: { duration: PATTERN_DURATION / 1000, ease: [0.34, 1.56, 0.64, 1] },
-              rotate: { duration: PATTERN_DURATION / 1000 * 3, ease: "linear", repeat: Infinity }
+              opacity: { duration: PATTERN_DURATION / 1000 * 1.2, ease: "easeInOut" },
+              scale: { duration: PATTERN_DURATION / 1000 * 1.5, ease: [0.34, 1.56, 0.64, 1] },
+              rotate: { duration: PATTERN_DURATION / 1000 * 3, ease: "easeInOut" }
             }}
           >
             <Image
@@ -238,42 +223,42 @@ export default function LoadingAnimation() {
             <ParticleEffect />
           </motion.div>
 
-          {/* Sphere */}
+          {/* Sphere - ENHANCED EXPANSION */}
           <motion.div
             style={sphereGradient}
             className="absolute rounded-full z-20"
             initial={{ scale: 0, opacity: 0, width: "32px", height: "32px" }}
             animate={{ 
-              scale: animationPhase === 1 ? 1 : animationPhase > 1 ? 20 : 0, 
-              opacity: animationPhase === 1 ? 1 : 0,
+              scale: animationPhase === 1 ? 1 : animationPhase === 2 ? 5 : animationPhase > 2 ? 20 : 0, 
+              opacity: animationPhase === 1 ? 1 : animationPhase === 2 ? 0.9 : 0,
               width: animationPhase === 1 ? "240px" : "32px",
               height: animationPhase === 1 ? "240px" : "32px",
             }}
             transition={{ 
               scale: { 
-                duration: SPHERE_DURATION / 1000, 
-                ease: [0.34, 1.56, 0.64, 1]
+                duration: SPHERE_DURATION / 1000 * 1.5, 
+                ease: [0.2, 1.2, 0.3, 1] // Enhanced spring-like motion
               },
               opacity: { 
-                duration: SPHERE_DURATION / 1000 * 0.6, 
+                duration: SPHERE_DURATION / 1000 * 1.2, 
                 ease: "easeInOut" 
               },
               width: { 
-                duration: SPHERE_DURATION / 1000 * 0.8, 
+                duration: SPHERE_DURATION / 1000, 
                 ease: [0.34, 1.56, 0.64, 1] 
               },
               height: { 
-                duration: SPHERE_DURATION / 1000 * 0.8, 
+                duration: SPHERE_DURATION / 1000, 
                 ease: [0.34, 1.56, 0.64, 1] 
               }
             }}
           >
-            {/* Inner sphere glow effect */}
+            {/* Enhanced inner sphere glow effect */}
             <motion.div 
-              className="absolute inset-0 rounded-full bg-white/20"
+              className="absolute inset-0 rounded-full bg-white/30"
               animate={{
-                scale: [0.7, 1, 0.7],
-                opacity: [0.1, 0.4, 0.1]
+                scale: [0.7, 1.2, 0.7],
+                opacity: [0.1, 0.5, 0.1]
               }}
               transition={{
                 duration: 3,
@@ -281,20 +266,37 @@ export default function LoadingAnimation() {
                 ease: "easeInOut"
               }}
             />
+            
+            {/* Additional inner pulse */}
+            <motion.div 
+              className="absolute inset-0 rounded-full bg-white/10"
+              initial={{ scale: 0.5 }}
+              animate={{
+                scale: [0.5, 1.3, 0.5],
+                opacity: [0.1, 0.3, 0.1]
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 0.5
+              }}
+            />
           </motion.div>
 
-          {/* Fullscreen gradient */}
+          {/* Fullscreen gradient with enhanced transition to home */}
           <motion.div 
             style={fullscreenGradient} 
             className="absolute inset-0 z-30"
             initial={{ opacity: 0 }}
             animate={{ 
-              opacity: animationPhase === 2 ? 1 : 0
+              opacity: animationPhase === 2 ? [0, 0.3, 0.7, 1] : animationPhase === 4 ? [1, 0.8, 0.5, 0] : 0
             }}
             transition={{ 
               opacity: { 
-                duration: FULLSCREEN_DURATION / 1000 * 0.7, 
-                ease: "easeInOut" 
+                duration: animationPhase === 4 ? BACKGROUND_TRANSITION / 1000 * 1.2 : FULLSCREEN_DURATION / 1000, 
+                ease: "easeInOut",
+                times: animationPhase === 2 ? [0, 0.2, 0.6, 1] : animationPhase === 4 ? [0, 0.3, 0.7, 1] : [0, 1]
               }
             }}
           >
@@ -310,14 +312,14 @@ export default function LoadingAnimation() {
                 ease: "easeInOut"
               }}
             >
-              {/* Floating light particles */}
-              {Array.from({ length: 8 }).map((_, i) => (
+              {/* Enhanced floating light particles - more particles */}
+              {Array.from({ length: 12 }).map((_, i) => (
                 <motion.div 
                   key={i}
                   className="absolute rounded-full bg-white/60 blur-md"
                   style={{
-                    width: 20 + Math.random() * 40,
-                    height: 20 + Math.random() * 40,
+                    width: 15 + Math.random() * 50,
+                    height: 15 + Math.random() * 50,
                   }}
                   initial={{
                     x: `${Math.random() * 100}%`,
@@ -335,7 +337,8 @@ export default function LoadingAnimation() {
                       `${Math.random() * 100}%`, 
                       `${Math.random() * 100}%`
                     ],
-                    opacity: [0.1, 0.5, 0.1]
+                    opacity: [0.1, 0.5, 0.1],
+                    scale: [0.8, 1.2, 0.8] // Added scale animation
                   }}
                   transition={{
                     duration: 8 + Math.random() * 7,
@@ -348,77 +351,24 @@ export default function LoadingAnimation() {
               ))}
             </motion.div>
           </motion.div>
-
-          {/* Gradient bar - positioned exactly where search bar will be */}
-          <motion.div
-            style={barGradient}
-            className="absolute rounded-full z-40 backdrop-blur-sm"
-            initial={{ 
-              width: 0, 
-              height: "48px", 
-              opacity: 0,
-              top: "50%",
-              left: "50%",
-              x: "-50%",
-              y: "80px" 
-            }}
+          
+          {/* Added subtle radial gradient at the end for smoother transition to home */}
+          <motion.div 
+            className="absolute inset-0 z-35 bg-radial-gradient"
+            initial={{ opacity: 0 }}
             animate={{ 
-              width: animationPhase >= 3 ? "500px" : 0, 
-              opacity: animationPhase === 3 ? 1 : 0,
-              scale: animationPhase === 3 ? [0.98, 1.02, 1] : 1
+              opacity: animationPhase === 4 ? 0.8 : 0
             }}
             transition={{ 
-              width: { 
-                duration: BAR_DURATION / 1000 * 0.6, 
-                ease: [0.34, 1.56, 0.64, 1] 
-              },
               opacity: { 
-                duration: BAR_DURATION / 1000 * 0.4, 
+                duration: BACKGROUND_TRANSITION / 1000, 
                 ease: "easeInOut" 
-              },
-              scale: {
-                duration: 1.5,
-                times: [0, 0.5, 1],
-                ease: "easeInOut",
-                repeat: animationPhase === 3 ? 2 : 0,
               }
             }}
-          >
-            {/* Animated shimmer effect */}
-            <motion.div
-              className="absolute inset-0 overflow-hidden rounded-full"
-              initial={{ opacity: 0.6 }}
-            >
-              <motion.div 
-                className="absolute h-full w-40 bg-gradient-to-r from-transparent via-white/40 to-transparent skew-x-12"
-                animate={{ x: ["calc(-100%)", "calc(500px + 100%)"] }}
-                transition={{ 
-                  duration: 2.5, 
-                  repeat: Infinity, 
-                  ease: "easeInOut",
-                  repeatDelay: 0.5
-                }}
-              />
-            </motion.div>
-            
-            {/* Pulse animation around the bar */}
-            <motion.div
-              className="absolute inset-0 rounded-full"
-              initial={{ opacity: 0 }}
-              animate={{ 
-                opacity: [0, 0.4, 0],
-                scale: [1, 1.15, 1]
-              }}
-              transition={{ 
-                duration: 2.5, 
-                repeat: Infinity, 
-                ease: "easeInOut"
-              }}
-              style={{
-                boxShadow: `0 0 20px ${interpolateColor("#60a5fa", "#ffa6d9", colorProgress)}`
-              }}
-            />
-          </motion.div>
+            style={{
+              background: 'radial-gradient(circle, rgba(255,255,255,0) 30%, rgba(255,255,255,1) 100%)'
+            }}
+          />
         </motion.div>
       )}
     </AnimatePresence>

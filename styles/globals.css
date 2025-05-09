@@ -2,8 +2,24 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Import the font for the entire application */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+/* Apply the font to all elements */
+* {
+  font-family: 'Inter', sans-serif;
+}
+
+/* For the large "Genie" headings, use the same font */
+h1.logo-text {
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+}
+
+/* Make sure all pages have the same background */
 body {
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: white;
 }
 
 @layer utilities {
