@@ -1,41 +1,113 @@
 "use client";
 
-import { useState } from "react";
-import { Settings, Plus } from "lucide-react";
+import { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 
-export default function SearchBar() {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function SearchBar({ prompt = "A nearby place to unwind, like my trip to Tahoe", onExpand }: { prompt?: string; onExpand: () => void }) {
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [currentPrompt, setCurrentPrompt] = useState(prompt);
+  const [isFocused, setIsFocused] = useState(false);
 
-  const handleExpandClick = () => {
+  // Update when prompt changes
+  useEffect(() => {
     setIsTransitioning(true);
-
-    // Start transition animation
+    
+    // Fade out current prompt
     setTimeout(() => {
-      setIsExpanded(true);
+      setCurrentPrompt(prompt);
       setIsTransitioning(false);
-    }, 500); // Match this with the CSS transition duration
-  };
+    }, 300);
+  }, [prompt]);
 
   return (
     <div className="w-full max-w-[500px] relative mx-auto">
-      <div
-        className={`w-full flex items-center bg-white border border-gray-200 rounded-full px-4 py-3 shadow-sm transition-all duration-500 ${
-          isTransitioning ? "opacity-0 scale-105" : "opacity-100"
+      <motion.div
+        className={`w-full flex items-center bg-white/90 backdrop-blur-sm border ${isFocused ? 'border-gray-300' : 'border-gray-100'} 
+          rounded-full py-3 pl-4 pr-1 ${isFocused ? 'shadow-md' : 'shadow-sm'} transition-all duration-300 ${
+          isTransitioning ? "opacity-0" : "opacity-100"
         }`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.3 }}
+        whileHover={{ boxShadow: "0 4px 12px rgba(0, 0, 0, 0.05)" }}
       >
-        <Settings className="w-5 h-5 text-gray-500 mr-2" />
-        <input
-          type="text"
-          placeholder="A nearby place to unwind, like my trip to Tahoe"
-          className="flex-1 outline-none text-sm"
-        />
-        <button
-          className="ml-2 bg-black text-white rounded-full p-1"
-          onClick={handleExpandClick}
+        {/* Mini Gradient Sphere Icon */}
+        <div className="w-6 h-6 flex items-center justify-center mr-3 rounded-full overflow-hidden">
+          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-200 via-purple-200 to-pink-200" 
+               style={{ 
+                 boxShadow: "inset 0 0 4px rgba(255, 255, 255, 0.8)",
+                 filter: "blur(0.5px)"
+               }}>
+            <div className="w-6 h-6 absolute top-0 left-0 rounded-full bg-gradient-to-tl from-transparent via-white/30 to-transparent opacity-70" />
+          </div>
+        </div>
+        
+        {/* Search input with prompt text */}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={currentPrompt}
+            className="flex-1 relative"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <input
+              type="text"
+              value={currentPrompt}
+              onChange={(e) => setCurrentPrompt(e.target.value)}
+              className="w-full outline-none text-sm text-gray-600 font-light bg-transparent"
+              placeholder="Ask Genie..."
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+            />
+          </motion.div>
+        </AnimatePresence>
+        
+        {/* Elegant action button */}
+        <motion.button
+          className={`ml-2 ${isFocused ? 'bg-black' : 'bg-gray-900'} text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors duration-300`}
+          whileHover={{ scale: 1.05, backgroundColor: "#000" }}
+          whileTap={{ scale: 0.95 }}
+          onClick={onExpand}
         >
-          <Plus className="w-4 h-4" />
-        </button>
+          <motion.svg 
+            width="16" 
+            height="16" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            xmlns="http://www.w3.org/2000/svg"
+            whileHover={{ rotate: 90 }}
+            transition={{ duration: 0.3 }}
+          >
+            <path d="M12 4L12 20M20 12L4 12" stroke="white" strokeWidth="2" strokeLinecap="round"/>
+          </motion.svg>
+        </motion.button>
+      </motion.div>
+      
+      {/* Minimalist position indicator */}
+      <div className="absolute -bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+        {[0, 1, 2, 3].map((dot, i) => (
+          <motion.div 
+            key={i}
+            className={`h-0.5 rounded-full transition-all duration-300 ${
+              // Highlight the dot that corresponds to the current prompt
+              prompt.includes("nearby") && i === 0 ? "bg-gray-400" :
+              prompt.includes("restaurant") && i === 1 ? "bg-gray-400" :
+              prompt.includes("Alex") && i === 2 ? "bg-gray-400" :
+              prompt.includes("article") && i === 3 ? "bg-gray-400" :
+              "bg-gray-200"
+            }`}
+            animate={{ 
+              width: (prompt.includes("nearby") && i === 0) || 
+                     (prompt.includes("restaurant") && i === 1) || 
+                     (prompt.includes("Alex") && i === 2) || 
+                     (prompt.includes("article") && i === 3) 
+                ? 16 : 4
+            }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+          />
+        ))}
       </div>
     </div>
   );

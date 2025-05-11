@@ -1,9 +1,10 @@
 import type { Metadata } from 'next'
+import { AuthProvider } from '@/app/contexts/AuthContext'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Genie',
-  description: 'Created with v0',
+  description: 'Genie AI - Your Personal Assistant',
   generator: 'v0.dev',
   icons: {
     icon: '/images/flower-pattern.png', // Path relative to the public folder
@@ -17,7 +18,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   )
 }

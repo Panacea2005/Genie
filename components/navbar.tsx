@@ -1,19 +1,22 @@
 "use client"
 
-import { motion } from "framer-motion"
+import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { useState, useEffect } from "react"
+import { useAuth } from "@/app/contexts/AuthContext"
 
 // Custom button component 
 const NavButton = ({ 
   children, 
   href, 
   variant = "default",
+  onClick,
   ...props 
 }: { 
   children: React.ReactNode
-  href: string
+  href?: string
   variant?: "default" | "outline" | "ghost"
+  onClick?: () => void
   [key: string]: any
 }) => {
   const baseClass = "rounded-full px-4 py-1.5 text-sm font-medium flex items-center gap-1.5 transition-all duration-300"
@@ -24,8 +27,22 @@ const NavButton = ({
     ghost: "hover:bg-gray-100"
   }
   
+  if (onClick) {
+    return (
+      <motion.button 
+        className={`${baseClass} ${variants[variant]} cursor-pointer`}
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
+        onClick={onClick}
+        {...props}
+      >
+        {children}
+      </motion.button>
+    )
+  }
+  
   return (
-    <Link href={href} passHref>
+    <Link href={href || "/"} passHref>
       <motion.div 
         className={`${baseClass} ${variants[variant]} cursor-pointer`}
         whileHover={{ scale: 1.03 }}
@@ -38,8 +55,86 @@ const NavButton = ({
   )
 }
 
+// User avatar component with dropdown menu
+const UserAvatar = ({ user, onSignOut }: { user: any, onSignOut: () => void }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || "User"
+  const initial = displayName.charAt(0).toUpperCase()
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setIsOpen(false)
+    }
+    
+    if (isOpen) {
+      document.addEventListener('click', handleClickOutside)
+    }
+    
+    return () => {
+      document.removeEventListener('click', handleClickOutside)
+    }
+  }, [isOpen])
+  
+  return (
+    <div className="relative">
+      <motion.div 
+        className="flex items-center gap-2 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsOpen(!isOpen)
+        }}
+        whileHover={{ scale: 1.05 }}
+      >
+        <span className="text-xs text-gray-500 font-light hidden sm:inline">
+          {displayName}
+        </span>
+        <div className="w-8 h-8 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-full flex items-center justify-center text-gray-800 text-sm">
+          {initial}
+        </div>
+      </motion.div>
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 overflow-hidden z-50"
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.2 }}
+          >
+            <div className="p-3 border-b border-gray-100">
+              <p className="text-sm font-medium text-gray-800">{displayName}</p>
+              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            </div>
+            <div className="p-2">
+              <Link href="/profile" className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded transition-colors w-full text-left">
+                Profile
+              </Link>
+              <Link href="/settings" className="block px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded transition-colors w-full text-left">
+                Settings
+              </Link>
+              <button 
+                className="w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded transition-colors text-left"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSignOut()
+                  setIsOpen(false)
+                }}
+              >
+                Sign Out
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
 export default function Navbar({ currentPage = "home" }: { currentPage?: string }) {
   const [isScrolled, setIsScrolled] = useState(false)
+  const { user, loading, signOut } = useAuth()
 
   // Add scroll detection in useEffect to prevent errors
   useEffect(() => {
@@ -99,22 +194,32 @@ export default function Navbar({ currentPage = "home" }: { currentPage?: string 
       </div>
       
       <div className="flex items-center gap-3">
-        {/* Chat button - added before auth */}
+        {/* Conditional Waitlist/Home button */}
+        {currentPage === "waitlist" ? (
+          <NavButton href="/" variant="outline" className="text-xs font-light flex items-center">
+            <span className="mr-1">↑</span> Home
+          </NavButton>
+        ) : (
+          <NavButton href="/waitlist" variant="outline" className="text-xs font-light flex items-center">
+            <span className="mr-1">→</span> Waitlist
+          </NavButton>
+        )}
+        
+        {/* Chat button - second */}
         <NavButton href="/chat" variant="ghost" className="text-xs text-gray-500 font-light">
           Chat
         </NavButton>
 
-        <NavButton href="/auth" variant="ghost" className="text-xs text-gray-500 font-light">
-          Sign Up / Login
-        </NavButton>
-        
-        {currentPage === "home" ? (
-          <NavButton href="/waitlist" variant="outline" className="text-xs font-light flex items-center">
-            Waitlist <span className="ml-1">→</span>
-          </NavButton>
+        {loading ? (
+          // Loading state
+          <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
+        ) : user ? (
+          // User is signed in - show user avatar
+          <UserAvatar user={user} onSignOut={signOut} />
         ) : (
-          <NavButton href="/" variant="outline" className="text-xs font-light flex items-center">
-            Home <span className="ml-1">↑</span>
+          // User is not signed in - show auth button last
+          <NavButton href="/auth" variant="ghost" className="text-xs text-gray-500 font-light">
+            Sign Up / Login
           </NavButton>
         )}
       </div>
