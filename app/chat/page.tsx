@@ -19,10 +19,49 @@ import {
   ChevronRight,
   Paperclip,
   X,
+  Heart,
+  LifeBuoy,
+  BookOpen,
+  BarChart2,
+  Shield,
+  EyeOff,
+  AlertTriangle,
+  Mic,
+  MicOff,
+  ChevronUp,
+  SmilePlus,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { chatService, Message as ChatServiceMessage } from "@/lib/services/chatService";
-import { chatStore, Message as BaseMessage, ChatHistory } from "@/lib/services/chatStore";
+import {
+  chatService,
+  Message as ChatServiceMessage,
+} from "@/lib/services/chatService";
+import {
+  chatStore,
+  Message as BaseMessage,
+  ChatHistory,
+  MentalHealthContext,
+} from "@/lib/services/chatStore";
+
+// Mental health specific imports
+import EmotionSelector from "@/components/chat/emotion-selector";
+import WellnessExercise from "@/components/chat/wellness-exercise";
+import MentalHealthResources from "@/components/chat/mental-health-resources";
+import MoodTracker from "@/components/chat/mood-tracker";
+import SafetyPlan from "@/components/chat/safety-plan";
+import CopingSkillsLibrary from "@/components/chat/coping-skills-library";
+import CrisisAlert from "@/components/chat/crisis-alert";
+import ModelSelector from "@/components/chat/model-selector";
+import {
+  mentalHealthTechniques,
+  getTechniqueById,
+} from "@/lib/services/mentalHealthResources";
+import {
+  analyzeMessage,
+  needsMentalHealthReferral,
+  detectTriggeringContent,
+} from "@/lib/services/mentalHealthUtils";
+import Groq from "groq-sdk";
 
 // Import Navigation component
 const Navbar = dynamic(() => import("@/components/navbar"), {
@@ -48,7 +87,7 @@ export default function ChatPage() {
   // You can replace this with actual auth later
   const userId = "anonymous-user";
 
-  // State management
+  // State management for chat functionality
   const [mounted, setMounted] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -58,13 +97,42 @@ export default function ChatPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showInitialMessage, setShowInitialMessage] = useState(true);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [uploadedFileContent, setUploadedFileContent] = useState<string | null>(null);
+  const [uploadedFileContent, setUploadedFileContent] = useState<string | null>(
+    null
+  );
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [toolsBarExpanded, setToolsBarExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
   const [activeChat, setActiveChat] = useState<number | null>(null); // For hover state
   const [isLoadingChats, setIsLoadingChats] = useState(true); // Add loading state for chats
   const [generatingText, setGeneratingText] = useState(false);
   const [allMessages, setAllMessages] = useState<Message[]>([]); // For storing all messages including user messages
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [processingAudio, setProcessingAudio] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Mental health related state
+  const [showEmotionSelector, setShowEmotionSelector] = useState(false);
+  const [selectedEmotion, setSelectedEmotion] = useState<any>(null);
+  const [showWellnessExercise, setShowWellnessExercise] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
+  const [showResources, setShowResources] = useState(false);
+  const [showMoodTracker, setShowMoodTracker] = useState(false);
+  const [showCopingSkills, setShowCopingSkills] = useState(false);
+  const [showSafetyPlan, setShowSafetyPlan] = useState(false);
+  const [showDisclaimer, setShowDisclaimer] = useState(true);
+  const [moodData, setMoodData] = useState<any[]>([]);
+  const [crisisDetected, setCrisisDetected] = useState(false);
+  const [showCrisisAlert, setShowCrisisAlert] = useState(false);
+  const [anxietyDetected, setAnxietyDetected] = useState(false);
+  const [showPrivacyMode, setShowPrivacyMode] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("llama3-70b-8192");
+  const [currentMentalHealthContext, setCurrentMentalHealthContext] =
+    useState<MentalHealthContext | null>(null);
 
   // Refs
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -94,9 +162,472 @@ export default function ChatPage() {
   // Scroll to bottom when messages change
   useEffect(() => {
     if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+      chatContainerRef.current.scrollTop =
+        chatContainerRef.current.scrollHeight;
     }
   }, [messages, allMessages]);
+
+  useEffect(() => {
+    setMounted(true);
+
+    // Load tools bar state from localStorage
+    const toolsBarExpanded = localStorage.getItem("toolsBarExpanded");
+    if (toolsBarExpanded !== null) {
+      setToolsBarExpanded(toolsBarExpanded === "true");
+    }
+
+    // Load chat history from Supabase on component mount
+    const loadChatHistory = async () => {
+      try {
+        setIsLoadingChats(true);
+        const history = await chatStore.getChatHistory(userId);
+        setChatHistory(history);
+      } catch (error) {
+        console.error("Error loading chat history:", error);
+      } finally {
+        setIsLoadingChats(false);
+      }
+    };
+
+    loadChatHistory();
+  }, [userId]);
+
+  // 3. Add this handler function for the tools bar toggle:
+  const handleToolsBarToggle = (
+    expanded: boolean | ((prevState: boolean) => boolean)
+  ) => {
+    setToolsBarExpanded(expanded);
+    localStorage.setItem("toolsBarExpanded", expanded.toString());
+  };
+
+  const startRecording = async () => {
+    try {
+      audioChunksRef.current = [];
+      setRecordingTime(0);
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = handleAudioStop;
+
+      mediaRecorder.start();
+      setIsRecording(true);
+
+      // Start a timer to track recording duration
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime((prevTime) => prevTime + 1);
+      }, 1000);
+
+      // Show a toast or notification that recording has started
+      console.log("Recording started...");
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      // Show error notification
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+
+      // Stop all tracks on the stream to release the microphone
+      mediaRecorderRef.current.stream
+        .getTracks()
+        .forEach((track) => track.stop());
+
+      // Clear the timer
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+
+      setIsRecording(false);
+      setProcessingAudio(true);
+    }
+  };
+
+  const processAudio = async (base64Audio: string) => {
+    try {
+      console.log("Processing audio...");
+      setProcessingAudio(true);
+
+      // Create a fallback in case the API call fails
+      let transcribedText = "";
+
+      try {
+        // DIRECT APPROACH: Call Groq API directly from the client
+        // This is a temporary workaround - in production, you should use your backend
+        const groq = new Groq({
+          apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || "",
+          dangerouslyAllowBrowser: true, // Enabling for client-side use
+        });
+
+        // Convert base64 to blob
+        const binaryData = atob(base64Audio);
+        const bytes = new Uint8Array(binaryData.length);
+        for (let i = 0; i < binaryData.length; i++) {
+          bytes[i] = binaryData.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: "audio/webm" });
+        const file = new File([blob], "recording.webm", { type: "audio/webm" });
+
+        // Call Groq API directly
+        const response = await groq.audio.transcriptions.create({
+          model: "whisper-large-v3-turbo",
+          file: file,
+          language: "en",
+        });
+
+        transcribedText = response.text;
+        console.log("Transcription successful:", transcribedText);
+      } catch (apiError) {
+        console.error("Direct API call failed:", apiError);
+
+        // FALLBACK: Try through your backend API
+        try {
+          const response = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              audio: base64Audio,
+              model: "whisper-large-v3-turbo",
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error(
+              `Backend API error: ${response.status} ${response.statusText}`
+            );
+          }
+
+          const data = await response.json();
+          transcribedText = data.text || "";
+          console.log("Backend transcription successful:", transcribedText);
+        } catch (backendError) {
+          console.error("Backend API call failed:", backendError);
+
+          // ULTIMATE FALLBACK: Use a mock response
+          transcribedText =
+            "I couldn't transcribe your audio. Please try typing your message.";
+        }
+      }
+
+      // Handle empty transcription
+      if (!transcribedText.trim()) {
+        console.warn("Empty transcription result");
+        transcribedText =
+          "I couldn't capture your voice clearly. Please try again or type your message.";
+      }
+
+      // Update the input field with the transcribed text
+      setInput((prev) => {
+        const trimmedPrev = prev.trim();
+        const newText = trimmedPrev
+          ? `${trimmedPrev} ${transcribedText}`
+          : transcribedText;
+        console.log("Setting input to:", newText);
+        return newText;
+      });
+
+      // Focus the input field
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+        }
+      }, 100);
+    } catch (error) {
+      console.error("Error in processAudio:", error);
+      // Add a fallback text to the input
+      setInput((prev) => {
+        return prev + " [Voice transcription failed]";
+      });
+    } finally {
+      setProcessingAudio(false);
+    }
+  };
+
+  // Simplified handleAudioStop function to work with the new processAudio
+  const handleAudioStop = async () => {
+    try {
+      const audioBlob = new Blob(audioChunksRef.current, {
+        type: "audio/webm",
+      });
+
+      // Get the audio as base64
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+
+      reader.onloadend = async () => {
+        const base64String = reader.result?.toString() || "";
+        const base64Audio = base64String.split(",")[1]; // Remove the data URL prefix
+
+        if (base64Audio) {
+          await processAudio(base64Audio);
+        } else {
+          console.error("Failed to convert audio to base64");
+          setInput((prev) => prev + " [Audio conversion failed]");
+        }
+      };
+    } catch (error) {
+      console.error("Error processing recording:", error);
+      setInput((prev) => prev + " [Recording processing failed]");
+    } finally {
+      setProcessingAudio(false);
+    }
+  };
+
+  // 4. Add a cleanup function to ensure resources are released
+  useEffect(() => {
+    return () => {
+      // Clean up on component unmount
+      if (
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state === "recording"
+      ) {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current.stream
+          .getTracks()
+          .forEach((track) => track.stop());
+      }
+
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current);
+      }
+    };
+  }, []);
+
+  // 5. Add this function to format the recording time
+  const formatTime = (seconds: number): string => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs
+      .toString()
+      .padStart(2, "0")}`;
+  };
+
+  // Load mental health context when current chat changes
+  useEffect(() => {
+    const loadMentalHealthContext = async () => {
+      if (currentChatId !== null) {
+        const chat = await chatStore.getChatById(currentChatId);
+        if (chat && chat.mentalHealthContext) {
+          setCurrentMentalHealthContext(chat.mentalHealthContext);
+        } else {
+          setCurrentMentalHealthContext(null);
+        }
+      } else {
+        setCurrentMentalHealthContext(null);
+      }
+    };
+
+    loadMentalHealthContext();
+  }, [currentChatId]);
+
+  // Load mood data for mood tracker
+  useEffect(() => {
+    const loadMoodData = async () => {
+      if (currentChatId !== null) {
+        const chat = await chatStore.getChatById(currentChatId);
+        if (
+          chat &&
+          chat.mentalHealthContext &&
+          chat.mentalHealthContext.reportedMoods
+        ) {
+          // Convert to the format needed by MoodTracker
+          const moods = chat.mentalHealthContext.reportedMoods;
+
+          // Group by date
+          const groupedMoods: { [key: string]: any[] } = {};
+          moods.forEach((mood) => {
+            const date = new Date(mood.timestamp || new Date());
+            const dateString = date.toISOString().split("T")[0];
+
+            if (!groupedMoods[dateString]) {
+              groupedMoods[dateString] = [];
+            }
+
+            groupedMoods[dateString].push(mood);
+          });
+
+          // Convert to array format
+          const moodDataArray = Object.entries(groupedMoods).map(
+            ([date, moods]) => ({
+              date,
+              moods,
+            })
+          );
+
+          setMoodData(moodDataArray);
+        }
+      }
+    };
+
+    loadMoodData();
+  }, [currentChatId, currentMentalHealthContext]);
+
+  // Automatically suggest wellness exercises for anxiety
+  useEffect(() => {
+    if (anxietyDetected && !crisisDetected && messages.length > 0) {
+      // Wait a bit before suggesting an exercise
+      const timer = setTimeout(() => {
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage.role === "assistant") {
+          const systemMessage: Message = {
+            role: "assistant",
+            content:
+              "I notice you might be feeling anxious. Would you like to try a quick breathing exercise to help you feel calmer?",
+            timestamp: new Date(),
+          };
+
+          setMessages((prev) => [...prev, systemMessage]);
+          setAllMessages((prev) => [...prev, systemMessage]);
+
+          if (currentChatId !== null) {
+            chatStore.updateChat(currentChatId, {
+              messages: [...allMessages, systemMessage],
+            });
+          }
+
+          // Find a breathing exercise
+          const breathingExercise = mentalHealthTechniques.find(
+            (t) => t.category === "breathing"
+          );
+          if (breathingExercise) {
+            setSelectedExercise(breathingExercise.id);
+          }
+        }
+      }, 5000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [anxietyDetected, crisisDetected, messages]);
+
+  // Crisis detection function
+  const detectCrisis = (message: string): boolean => {
+    const crisisKeywords = [
+      "suicide",
+      "kill myself",
+      "end my life",
+      "don't want to live",
+      "self-harm",
+      "hurt myself",
+      "cutting myself",
+      "death",
+      "dying",
+      "overdose",
+      "can't go on",
+      "hopeless",
+      "helpless",
+      "unbearable",
+    ];
+
+    const lowerMessage = message.toLowerCase();
+    return crisisKeywords.some((keyword) => lowerMessage.includes(keyword));
+  };
+
+  // Anxiety detection function
+  const detectAnxiety = (message: string): boolean => {
+    const anxietyKeywords = [
+      "anxiety",
+      "anxious",
+      "panic",
+      "worried",
+      "fear",
+      "stress",
+      "overwhelm",
+      "nervous",
+    ];
+    const lowerMessage = message.toLowerCase();
+    return anxietyKeywords.some((keyword) => lowerMessage.includes(keyword));
+  };
+
+  // Handler for emotion selection
+  const handleEmotionSelect = (emotion: any, intensity?: number) => {
+    setSelectedEmotion({
+      ...emotion,
+      intensity: intensity || 5,
+      timestamp: new Date(),
+    });
+
+    // Automatically add to the chat input
+    setInput(
+      (current) =>
+        current +
+        (current ? "\n\n" : "") +
+        `I'm feeling ${emotion.name.toLowerCase()}${
+          intensity ? ` (${intensity}/10)` : ""
+        }.`
+    );
+
+    setShowEmotionSelector(false);
+  };
+
+  // Handler for exercise completion
+  const handleExerciseComplete = async () => {
+    if (currentChatId !== null && selectedExercise) {
+      const technique = getTechniqueById(selectedExercise);
+      if (technique) {
+        await chatStore.addRecommendedTechnique(currentChatId, technique.id);
+
+        // Add a message to the chat
+        const systemMessage: Message = {
+          role: "assistant",
+          content: `I notice you've completed the "${technique.name}" exercise. Great job! How do you feel now?`,
+          timestamp: new Date(),
+        };
+
+        setMessages((prev) => [...prev, systemMessage]);
+        setAllMessages((prev) => [...prev, systemMessage]);
+
+        if (currentChatId !== null) {
+          await chatStore.updateChat(currentChatId, {
+            messages: [...allMessages, systemMessage],
+          });
+        }
+      }
+
+      setShowWellnessExercise(false);
+      setSelectedExercise(null);
+    }
+  };
+
+  // Handler for safety plan updates
+  const handleSafetyPlanUpdate = async (
+    safetyPlan: MentalHealthContext["safetyPlan"]
+  ) => {
+    if (currentChatId !== null) {
+      await chatStore.updateMentalHealthContext(currentChatId, { safetyPlan });
+
+      // Update local state
+      if (currentMentalHealthContext) {
+        setCurrentMentalHealthContext({
+          ...currentMentalHealthContext,
+          safetyPlan,
+        });
+      }
+    }
+  };
+
+  // Handler for crisis help requests
+  const handleCrisisHelp = (helpType: string) => {
+    setShowCrisisAlert(false);
+
+    if (helpType === "safetyPlan") {
+      setShowSafetyPlan(true);
+    } else if (helpType === "resources") {
+      setShowResources(true);
+    }
+    // Chat continues normally for 'chat' option
+  };
 
   // Event handlers
   const handleSend = async () => {
@@ -104,6 +635,20 @@ export default function ChatPage() {
 
     try {
       setIsLoading(true);
+
+      // Check for crisis or anxiety signals
+      const isCrisis = detectCrisis(input);
+      const hasAnxiety = detectAnxiety(input);
+
+      if (isCrisis && !crisisDetected) {
+        setCrisisDetected(true);
+        setShowCrisisAlert(true);
+      }
+
+      if (hasAnxiety && !anxietyDetected) {
+        setAnxietyDetected(true);
+      }
+
       const userMessage: Message = {
         role: "user",
         // Include file information in the message content for proper display
@@ -114,22 +659,22 @@ export default function ChatPage() {
           : input,
         timestamp: new Date(),
       };
-      
+
       // Clear input immediately
       setInput("");
-      
+
       // Store the user message in our separate state
-      setAllMessages(prev => [...prev, userMessage]);
-      
+      setAllMessages((prev) => [...prev, userMessage]);
+
       // Add user message to chat and placeholder for AI
       setMessages((prev) => [
-        ...prev, 
+        ...prev,
         userMessage,
         {
           role: "assistant",
           content: "...",
-          timestamp: new Date()
-        }
+          timestamp: new Date(),
+        },
       ]);
 
       // Clear initial message state
@@ -145,8 +690,11 @@ export default function ChatPage() {
       setGeneratingText(true);
 
       // Get response from chat service
-      const model = "llama3-70b-8192"; // Default to a powerful model
-      const response = await chatService.sendMessage([...messages, userMessage], model);
+      const model = selectedModel;
+      const response = await chatService.sendMessage(
+        [...messages, userMessage],
+        model
+      );
 
       // Simulate typewriter effect for gradual text printing
       // Start with empty response content
@@ -167,11 +715,11 @@ export default function ChatPage() {
       const responseChars = response.split("");
       let currentText = "";
       const typingSpeed = 5; // Adjust typing speed (lower = faster)
-      
+
       for (let i = 0; i < responseChars.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, typingSpeed));
+        await new Promise((resolve) => setTimeout(resolve, typingSpeed));
         currentText += responseChars[i];
-        
+
         setMessages((prev) => {
           const messagesCopy = [...prev];
           messagesCopy[messagesCopy.length - 1] = {
@@ -180,21 +728,25 @@ export default function ChatPage() {
           };
           return messagesCopy;
         });
-        
+
         // Scroll to bottom as text appears
         if (chatContainerRef.current) {
-          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+          chatContainerRef.current.scrollTop =
+            chatContainerRef.current.scrollHeight;
         }
       }
 
       // Add the completed AI response to our all messages array
-      setAllMessages(prev => [...prev, {
-        role: "assistant",
-        content: response,
-        timestamp: new Date(),
-        speed: "2.3x FASTER",
-        tokens: Math.floor(response.length / 4), // Rough token estimate
-      }]);
+      setAllMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: response,
+          timestamp: new Date(),
+          speed: "2.3x FASTER",
+          tokens: Math.floor(response.length / 4), // Rough token estimate
+        },
+      ]);
 
       // Save the chat after the message exchange
       const assistantMessage: Message = {
@@ -204,9 +756,53 @@ export default function ChatPage() {
         speed: "2.3x FASTER",
         tokens: Math.floor(response.length / 4),
       };
-      
+
+      // Update mental health context if emotion was selected
+      if (currentChatId !== null) {
+        if (selectedEmotion) {
+          await chatStore.addMoodEntry(
+            currentChatId,
+            selectedEmotion.name,
+            selectedEmotion.intensity || 5,
+            selectedEmotion.notes
+          );
+
+          // Reset selected emotion
+          setSelectedEmotion(null);
+        }
+
+        // Update context with detected crisis/anxiety
+        if (isCrisis || hasAnxiety) {
+          const chat = await chatStore.getChatById(currentChatId);
+          if (chat && chat.mentalHealthContext) {
+            const updatedSymptoms = [
+              ...chat.mentalHealthContext.mentionedSymptoms,
+            ];
+
+            if (isCrisis && !updatedSymptoms.includes("crisis")) {
+              updatedSymptoms.push("crisis");
+            }
+
+            if (hasAnxiety && !updatedSymptoms.includes("anxiety")) {
+              updatedSymptoms.push("anxiety");
+            }
+
+            await chatStore.updateMentalHealthContext(currentChatId, {
+              mentionedSymptoms: updatedSymptoms,
+              lastCrisisCheck: isCrisis
+                ? new Date()
+                : chat.mentalHealthContext.lastCrisisCheck,
+            });
+          }
+        }
+      }
+
       // Use allMessages for storage since it has all user and AI messages
-      const updatedMessages: Message[] = [...allMessages, userMessage, assistantMessage];
+      const updatedMessages: Message[] = [
+        ...allMessages,
+        userMessage,
+        assistantMessage,
+      ];
 
       if (currentChatId === null) {
         // New chat
@@ -241,19 +837,24 @@ export default function ChatPage() {
         // Replace the last message (which should be our placeholder)
         messagesCopy[messagesCopy.length - 1] = {
           role: "assistant",
-          content: "I encountered an error processing your request. Please try again.",
+          content:
+            "I encountered an error processing your request. Please try again.",
           timestamp: new Date(),
         };
         return messagesCopy;
       });
-      
+
       // Add the error message to allMessages too
-      setAllMessages(prev => [...prev, {
-        role: "assistant",
-        content: "I encountered an error processing your request. Please try again.",
-        timestamp: new Date(),
-      }]);
-      
+      setAllMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "I encountered an error processing your request. Please try again.",
+          timestamp: new Date(),
+        },
+      ]);
+
       setGeneratingText(false);
     } finally {
       setIsLoading(false);
@@ -296,6 +897,21 @@ export default function ChatPage() {
       setMessages(displayMessages);
       setCurrentChatId(chat.id);
       setShowInitialMessage(false);
+
+      // Reset crisis detection state for new chat
+      setCrisisDetected(false);
+      setAnxietyDetected(false);
+
+      // Check if this chat has crisis or anxiety indicators
+      if (chat.mentalHealthContext) {
+        if (chat.mentalHealthContext.mentionedSymptoms.includes("crisis")) {
+          setCrisisDetected(true);
+        }
+        if (chat.mentalHealthContext.mentionedSymptoms.includes("anxiety")) {
+          setAnxietyDetected(true);
+        }
+      }
+
       if (window.innerWidth < 768) {
         setSidebarOpen(false); // Close sidebar on mobile after selection
       }
@@ -313,10 +929,17 @@ export default function ChatPage() {
       setAllMessages([]);
       setShowInitialMessage(true);
       setCurrentChatId(null);
+      setCrisisDetected(false);
+      setAnxietyDetected(false);
+      setCurrentMentalHealthContext(null);
     }
   };
 
-  const handlePinChat = async (chatId: number, currentPinned: boolean, e: React.MouseEvent) => {
+  const handlePinChat = async (
+    chatId: number,
+    currentPinned: boolean,
+    e: React.MouseEvent
+  ) => {
     e.stopPropagation(); // Prevent triggering the chat selection
     await chatStore.pinChat(chatId, currentPinned);
     const updatedHistory = await chatStore.getChatHistory(userId);
@@ -328,6 +951,9 @@ export default function ChatPage() {
     setAllMessages([]);
     setShowInitialMessage(true);
     setCurrentChatId(null);
+    setCrisisDetected(false);
+    setAnxietyDetected(false);
+    setCurrentMentalHealthContext(null);
     if (window.innerWidth < 768) {
       setSidebarOpen(false); // Close sidebar on mobile
     }
@@ -348,7 +974,7 @@ export default function ChatPage() {
     <main className="min-h-screen flex flex-col bg-white">
       {/* Background subtle gradient */}
       <div className="fixed inset-0 bg-gradient-to-br from-white via-gray-50 to-gray-100 -z-10" />
-      
+
       {/* Header - Using the Navbar component */}
       <Navbar currentPage="chat" />
 
@@ -421,7 +1047,16 @@ export default function ChatPage() {
                     }`}
                     onClick={() => handleLoadChat(chat.id)}
                   >
-                    {chat.pinned ? (
+                    {/* Indicate mental health chats with appropriate icons */}
+                    {chat.mentalHealthContext?.mentionedSymptoms?.includes(
+                      "crisis"
+                    ) ? (
+                      <AlertTriangle className="w-3 h-3 text-red-500" />
+                    ) : chat.mentalHealthContext?.mentionedSymptoms?.includes(
+                        "anxiety"
+                      ) ? (
+                      <Heart className="w-3 h-3 text-purple-500" />
+                    ) : chat.pinned ? (
                       <Pin className="w-3 h-3 text-indigo-500" />
                     ) : (
                       <Clock className="w-3 h-3 text-gray-400" />
@@ -476,9 +1111,7 @@ export default function ChatPage() {
             : "left-0 top-1/2 -translate-y-1/2 h-16 w-6 rounded-r-md"
         } hidden md:flex items-center justify-center bg-white/70 border-r border-t border-b border-gray-200 backdrop-blur-sm`}
         style={{
-          borderLeft: sidebarOpen
-            ? "none"
-            : "1px solid rgba(229, 231, 235, 1)",
+          borderLeft: sidebarOpen ? "none" : "1px solid rgba(229, 231, 235, 1)",
         }}
       >
         {sidebarOpen ? (
@@ -502,45 +1135,82 @@ export default function ChatPage() {
           sidebarOpen ? "md:pl-64" : "md:pl-0"
         } transition-all duration-300`}
       >
+        {/* Sidebar-aware Model Selector positioning */}
+        <div
+          className={`absolute top-0 z-40 p-4 transition-all duration-300 ${
+            sidebarOpen ? "left-64" : "left-0"
+          }`}
+        >
+          <ModelSelector
+            selectedModel={selectedModel}
+            setSelectedModel={setSelectedModel}
+            position="left"
+          />
+        </div>
+
         {/* Welcome Visualization State (before first message) */}
-        {showInitialMessage && (
-          <div 
-            className="fixed inset-0 flex flex-col items-center justify-center z-10"
-            style={{
-              // This adjusts the positioning when sidebar is open/closed
-              left: sidebarOpen ? "256px" : 0,
-              width: sidebarOpen ? "calc(100% - 256px)" : "100%",
-              top: "64px", // Account for navbar height
-              height: "calc(100% - 64px)"
-            }}
-          >
-            {/* Gradient Sphere with Simple, Elegant Text Overlay */}
-            <div className="relative w-full max-w-xl mx-auto">
-              {/* The Gradient Sphere */}
-              <div className="w-full" style={{ maxHeight: "70vh" }}>
-                <GradientSphere />
-              </div>
-              
-              {/* Single elegant text positioned on top of the sphere */}
-              <div className="absolute inset-0 flex items-center justify-center z-10">
-                <h2 
-                  className="text-3xl md:text-4xl lg:text-5xl font-light text-center text-gray-800"
-                  style={{ 
-                    position: 'relative', 
-                    zIndex: 20,
-                    textShadow: '0 2px 10px rgba(255,255,255,0.7)'
-                  }}
-                >
-                  Hi, I'm Genie.
-                </h2>
+        {showInitialMessage &&
+          !showEmotionSelector &&
+          !showWellnessExercise &&
+          !showResources &&
+          !showMoodTracker &&
+          !showCopingSkills &&
+          !showSafetyPlan && (
+            <div
+              className="fixed inset-0 flex flex-col items-center justify-center z-10"
+              style={{
+                // This adjusts the positioning when sidebar is open/closed
+                left: sidebarOpen ? "256px" : 0,
+                width: sidebarOpen ? "calc(100% - 256px)" : "100%",
+                top: "64px", // Account for navbar height
+                height: "calc(100% - 64px)",
+              }}
+            >
+              {/* Gradient Sphere with Simple, Elegant Text Overlay */}
+              <div className="relative w-full max-w-xl mx-auto">
+                {/* The Gradient Sphere */}
+                <div className="w-full" style={{ maxHeight: "70vh" }}>
+                  <GradientSphere />
+                </div>
+
+                {/* Single elegant text positioned on top of the sphere */}
+                <div className="absolute inset-0 flex items-center justify-center z-10">
+                  <h2
+                    className="text-3xl md:text-4xl lg:text-5xl font-light text-center text-gray-800"
+                    style={{
+                      position: "relative",
+                      zIndex: 20,
+                      textShadow: "0 2px 10px rgba(255,255,255,0.7)",
+                    }}
+                  >
+                    Hi, I'm Genie.
+                  </h2>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+        {/* Crisis Alert Dialog - Show when crisis is detected */}
+        {showCrisisAlert && (
+          <CrisisAlert
+            onClose={() => setShowCrisisAlert(false)}
+            onRequestHelp={handleCrisisHelp}
+            userLocation="United States" // You can customize this based on user location
+          />
         )}
-
         {/* Chat Interface (after first message or always visible but transparent initially) */}
         <AnimatePresence>
-          {(!showInitialMessage || messages.length > 0) && (
+          {/* Show chat UI when any of these conditions are met:
+      1. Initial message is hidden
+      2. There are messages
+      3. Any mental health component is showing */}
+          {(!showInitialMessage ||
+            messages.length > 0 ||
+            showEmotionSelector ||
+            showWellnessExercise ||
+            showResources ||
+            showMoodTracker ||
+            showCopingSkills ||
+            showSafetyPlan) && (
             <motion.div
               className={`absolute inset-0 flex flex-col pt-16 ${
                 sidebarOpen ? "md:pl-64" : "md:pl-0"
@@ -556,6 +1226,106 @@ export default function ChatPage() {
               >
                 <div className="max-w-3xl mx-auto">
                   <AnimatePresence>
+                    {/* Emotion Selector */}
+                    {showEmotionSelector && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="mb-4"
+                      >
+                        <EmotionSelector onSelect={handleEmotionSelect} />
+                      </motion.div>
+                    )}
+
+                    {/* Wellness Exercise */}
+                    {showWellnessExercise && selectedExercise && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="mb-4"
+                      >
+                        <WellnessExercise
+                          techniqueId={selectedExercise}
+                          onComplete={handleExerciseComplete}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* Mental Health Resources */}
+                    {showResources && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="mb-4"
+                      >
+                        <MentalHealthResources
+                          category={crisisDetected ? "crisis" : undefined}
+                          onClose={() => setShowResources(false)}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* Mood Tracker */}
+                    {showMoodTracker && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="mb-4"
+                      >
+                        <MoodTracker
+                          moodData={moodData}
+                          onNewEntry={(mood, intensity, notes) => {
+                            if (currentChatId !== null) {
+                              chatStore.addMoodEntry(
+                                currentChatId,
+                                mood,
+                                intensity,
+                                notes
+                              );
+                            }
+                          }}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* Coping Skills Library */}
+                    {showCopingSkills && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="mb-4"
+                      >
+                        <CopingSkillsLibrary
+                          onSelectTechnique={(techniqueId) => {
+                            setSelectedExercise(techniqueId);
+                            setShowCopingSkills(false);
+                            setShowWellnessExercise(true);
+                          }}
+                          onClose={() => setShowCopingSkills(false)}
+                        />
+                      </motion.div>
+                    )}
+
+                    {/* Safety Plan */}
+                    {showSafetyPlan && currentMentalHealthContext && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="mb-4"
+                      >
+                        <SafetyPlan
+                          safetyPlan={currentMentalHealthContext.safetyPlan}
+                          onUpdate={handleSafetyPlanUpdate}
+                        />
+                      </motion.div>
+                    )}
+
                     {messages.map((message, index) => (
                       <motion.div
                         key={index}
@@ -591,7 +1361,8 @@ export default function ChatPage() {
                                 <div className="dot"></div>
                                 <div className="dot"></div>
                               </div>
-                            ) : generatingText && index === messages.length - 1 ? (
+                            ) : generatingText &&
+                              index === messages.length - 1 ? (
                               /* Enhanced generating animation for the last message when in typing mode */
                               <div className="flex-1 text-gray-800">
                                 <div className="mb-1 flex items-center text-xs text-indigo-400 font-light">
@@ -600,75 +1371,88 @@ export default function ChatPage() {
                                     <span className="ml-1">generating...</span>
                                   </span>
                                 </div>
-                                <div className="markdown-content">
-                                  <ReactMarkdown
-                                    components={{
-                                      h1: ({ node, ...props }) => (
-                                        <h1
-                                          className="text-xl font-bold my-3"
-                                          {...props}
-                                        />
-                                      ),
-                                      h2: ({ node, ...props }) => (
-                                        <h2
-                                          className="text-lg font-bold my-2"
-                                          {...props}
-                                        />
-                                      ),
-                                      h3: ({ node, ...props }) => (
-                                        <h3
-                                          className="text-md font-semibold my-2"
-                                          {...props}
-                                        />
-                                      ),
-                                      p: ({ node, ...props }) => (
-                                        <p className="mb-3" {...props} />
-                                      ),
-                                      ul: ({ node, ...props }) => (
-                                        <ul
-                                          className="list-disc pl-5 mb-3"
-                                          {...props}
-                                        />
-                                      ),
-                                      ol: ({ node, ...props }) => (
-                                        <ol
-                                          className="list-decimal pl-5 mb-3"
-                                          {...props}
-                                        />
-                                      ),
-                                      li: ({ node, ...props }) => (
-                                        <li className="mb-1" {...props} />
-                                      ),
-                                      a: ({ node, ...props }) => (
-                                        <a
-                                          className="text-indigo-600 hover:underline flex items-center"
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          {...props}
-                                        >
-                                          {props.children}
-                                          <ExternalLink className="w-3 h-3 ml-1" />
-                                        </a>
-                                      ),
-                                      strong: ({ node, ...props }) => (
-                                        <strong
-                                          className="font-bold"
-                                          {...props}
-                                        />
-                                      ),
-                                      em: ({ node, ...props }) => (
-                                        <em className="italic" {...props} />
-                                      ),
-                                      blockquote: ({ node, ...props }) => (
-                                        <blockquote
-                                          className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
-                                          {...props}
-                                        />
-                                      ),
-                                    }}
-                                  >
-                                    {message.content}
-                                  </ReactMarkdown>
+                                <div
+                                  className={`markdown-content ${
+                                    showPrivacyMode ? "privacy-blur" : ""
+                                  }`}
+                                >
+                                  {showPrivacyMode ? (
+                                    <div
+                                      onClick={() => setShowPrivacyMode(false)}
+                                      className="p-3 cursor-pointer text-center"
+                                    >
+                                      Content hidden for privacy. Click to view.
+                                    </div>
+                                  ) : (
+                                    <ReactMarkdown
+                                      components={{
+                                        h1: ({ node, ...props }) => (
+                                          <h1
+                                            className="text-xl font-bold my-3"
+                                            {...props}
+                                          />
+                                        ),
+                                        h2: ({ node, ...props }) => (
+                                          <h2
+                                            className="text-lg font-bold my-2"
+                                            {...props}
+                                          />
+                                        ),
+                                        h3: ({ node, ...props }) => (
+                                          <h3
+                                            className="text-md font-semibold my-2"
+                                            {...props}
+                                          />
+                                        ),
+                                        p: ({ node, ...props }) => (
+                                          <p className="mb-3" {...props} />
+                                        ),
+                                        ul: ({ node, ...props }) => (
+                                          <ul
+                                            className="list-disc pl-5 mb-3"
+                                            {...props}
+                                          />
+                                        ),
+                                        ol: ({ node, ...props }) => (
+                                          <ol
+                                            className="list-decimal pl-5 mb-3"
+                                            {...props}
+                                          />
+                                        ),
+                                        li: ({ node, ...props }) => (
+                                          <li className="mb-1" {...props} />
+                                        ),
+                                        a: ({ node, ...props }) => (
+                                          <a
+                                            className="text-indigo-600 hover:underline flex items-center"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            {...props}
+                                          >
+                                            {props.children}
+                                            <ExternalLink className="w-3 h-3 ml-1" />
+                                          </a>
+                                        ),
+                                        strong: ({ node, ...props }) => (
+                                          <strong
+                                            className="font-bold"
+                                            {...props}
+                                          />
+                                        ),
+                                        em: ({ node, ...props }) => (
+                                          <em className="italic" {...props} />
+                                        ),
+                                        blockquote: ({ node, ...props }) => (
+                                          <blockquote
+                                            className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
+                                            {...props}
+                                          />
+                                        ),
+                                      }}
+                                    >
+                                      {message.content}
+                                    </ReactMarkdown>
+                                  )}
                                 </div>
                                 {/* Blinking cursor at the end */}
                                 <div className="typing-cursor"></div>
@@ -686,92 +1470,120 @@ export default function ChatPage() {
                                 )}
 
                                 {/* Message content directly on canvas */}
-                                <div className="text-gray-800 overflow-wrap-anywhere markdown-content">
-                                  <ReactMarkdown
-                                    components={{
-                                      h1: ({ node, ...props }) => (
-                                        <h1
-                                          className="text-xl font-bold my-3"
-                                          {...props}
-                                        />
-                                      ),
-                                      h2: ({ node, ...props }) => (
-                                        <h2
-                                          className="text-lg font-bold my-2"
-                                          {...props}
-                                        />
-                                      ),
-                                      h3: ({ node, ...props }) => (
-                                        <h3
-                                          className="text-md font-semibold my-2"
-                                          {...props}
-                                        />
-                                      ),
-                                      p: ({ node, ...props }) => (
-                                        <p className="mb-3" {...props} />
-                                      ),
-                                      ul: ({ node, ...props }) => (
-                                        <ul
-                                          className="list-disc pl-5 mb-3"
-                                          {...props}
-                                        />
-                                      ),
-                                      ol: ({ node, ...props }) => (
-                                        <ol
-                                          className="list-decimal pl-5 mb-3"
-                                          {...props}
-                                        />
-                                      ),
-                                      li: ({ node, ...props }) => (
-                                        <li className="mb-1" {...props} />
-                                      ),
-                                      a: ({ node, ...props }) => (
-                                        <a
-                                          className="text-indigo-600 hover:underline flex items-center"
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          {...props}
-                                        >
-                                          {props.children}
-                                          <ExternalLink className="w-3 h-3 ml-1" />
-                                        </a>
-                                      ),
-                                      strong: ({ node, ...props }) => (
-                                        <strong
-                                          className="font-bold"
-                                          {...props}
-                                        />
-                                      ),
-                                      em: ({ node, ...props }) => (
-                                        <em className="italic" {...props} />
-                                      ),
-                                      blockquote: ({ node, ...props }) => (
-                                        <blockquote
-                                          className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
-                                          {...props}
-                                        />
-                                      ),
-                                      // Add styling for code blocks
-                                      code: ({ node, inline, className, children, ...props }: any) => {
-                                        return inline ? (
-                                          <code className="bg-gray-100 px-1 py-0.5 rounded text-indigo-600 text-sm" {...props}>
-                                            {children}
-                                          </code>
-                                        ) : (
-                                          <div className="bg-gray-50 rounded-md p-4 my-3 overflow-x-auto border border-gray-100">
-                                            <code className="text-sm font-mono text-gray-800" {...props}>
+                                <div
+                                  className={`text-gray-800 overflow-wrap-anywhere markdown-content ${
+                                    showPrivacyMode ? "privacy-blur" : ""
+                                  }`}
+                                >
+                                  {showPrivacyMode ? (
+                                    <div
+                                      onClick={() => setShowPrivacyMode(false)}
+                                      className="p-3 cursor-pointer text-center"
+                                    >
+                                      Content hidden for privacy. Click to view.
+                                    </div>
+                                  ) : (
+                                    <ReactMarkdown
+                                      components={{
+                                        h1: ({ node, ...props }) => (
+                                          <h1
+                                            className="text-xl font-bold my-3"
+                                            {...props}
+                                          />
+                                        ),
+                                        h2: ({ node, ...props }) => (
+                                          <h2
+                                            className="text-lg font-bold my-2"
+                                            {...props}
+                                          />
+                                        ),
+                                        h3: ({ node, ...props }) => (
+                                          <h3
+                                            className="text-md font-semibold my-2"
+                                            {...props}
+                                          />
+                                        ),
+                                        p: ({ node, ...props }) => (
+                                          <p className="mb-3" {...props} />
+                                        ),
+                                        ul: ({ node, ...props }) => (
+                                          <ul
+                                            className="list-disc pl-5 mb-3"
+                                            {...props}
+                                          />
+                                        ),
+                                        ol: ({ node, ...props }) => (
+                                          <ol
+                                            className="list-decimal pl-5 mb-3"
+                                            {...props}
+                                          />
+                                        ),
+                                        li: ({ node, ...props }) => (
+                                          <li className="mb-1" {...props} />
+                                        ),
+                                        a: ({ node, ...props }) => (
+                                          <a
+                                            className="text-indigo-600 hover:underline flex items-center"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            {...props}
+                                          >
+                                            {props.children}
+                                            <ExternalLink className="w-3 h-3 ml-1" />
+                                          </a>
+                                        ),
+                                        strong: ({ node, ...props }) => (
+                                          <strong
+                                            className="font-bold"
+                                            {...props}
+                                          />
+                                        ),
+                                        em: ({ node, ...props }) => (
+                                          <em className="italic" {...props} />
+                                        ),
+                                        blockquote: ({ node, ...props }) => (
+                                          <blockquote
+                                            className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
+                                            {...props}
+                                          />
+                                        ),
+                                        // Add styling for code blocks
+                                        code: ({
+                                          node,
+                                          inline,
+                                          className,
+                                          children,
+                                          ...props
+                                        }: any) => {
+                                          return inline ? (
+                                            <code
+                                              className="bg-gray-100 px-1 py-0.5 rounded text-indigo-600 text-sm"
+                                              {...props}
+                                            >
                                               {children}
                                             </code>
-                                          </div>
-                                        );
-                                      },
-                                      pre: ({ node, ...props }) => (
-                                        <pre className="bg-transparent p-0 overflow-visible" {...props} />
-                                      ),
-                                    }}
-                                  >
-                                    {message.content}
-                                  </ReactMarkdown>
+                                          ) : (
+                                            <div className="bg-gray-50 rounded-md p-4 my-3 overflow-x-auto border border-gray-100">
+                                              <code
+                                                className="text-sm font-mono text-gray-800"
+                                                {...props}
+                                              >
+                                                {children}
+                                              </code>
+                                            </div>
+                                          );
+                                        },
+                                        pre: ({ node, ...props }) => (
+                                          <pre
+                                            className="bg-transparent p-0 overflow-visible"
+                                            {...props}
+                                          />
+                                        ),
+                                      }}
+                                    >
+                                      {message.content}
+                                    </ReactMarkdown>
+                                  )}
                                 </div>
 
                                 {/* Action buttons */}
@@ -817,7 +1629,9 @@ export default function ChatPage() {
                       </div>
                       <div className="elegant-generating">
                         <span className="pulse-ring"></span>
-                        <span className="ml-2 text-sm text-gray-500 font-light">Thinking...</span>
+                        <span className="ml-2 text-sm text-gray-500 font-light">
+                          Thinking...
+                        </span>
                       </div>
                     </motion.div>
                   )}
@@ -826,7 +1640,6 @@ export default function ChatPage() {
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* Input Area - Always at bottom */}
         <div
           className={`fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-white/80 backdrop-blur-sm ${
@@ -834,6 +1647,215 @@ export default function ChatPage() {
           } transition-all duration-300`}
         >
           <div className="max-w-4xl mx-auto relative">
+            {/* Collapsible Mental Health Tools Bar */}
+            <div className="relative">
+              {/* Toggle button - always visible */}
+              <button
+                onClick={() => handleToolsBarToggle(!toolsBarExpanded)}
+                className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-6 h-6 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center z-10 hover:bg-gray-50 transition-colors"
+                aria-label={
+                  toolsBarExpanded ? "Collapse tools" : "Expand tools"
+                }
+              >
+                <motion.div
+                  animate={{ rotate: toolsBarExpanded ? 0 : 180 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ChevronUp className="w-3 h-3 text-gray-400" />
+                </motion.div>
+              </button>
+
+              {/* Tools container */}
+              <AnimatePresence>
+                {toolsBarExpanded && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="px-6 py-3 border-b border-gray-50 flex items-center justify-center gap-4 overflow-x-auto"
+                  >
+                    {/* Emotion Button - Minimized */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowEmotionSelector((prev) => !prev);
+                        setShowInitialMessage(false);
+                      }}
+                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        showEmotionSelector
+                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                      }`}
+                      title="How are you feeling?"
+                    >
+                      <SmilePlus className="w-4 h-4" />
+
+                      {/* Hover tooltip */}
+                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Emotions
+                      </span>
+                    </button>
+
+                    {/* Resources Button - Minimized */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowResources((prev) => !prev);
+                        setShowInitialMessage(false);
+                      }}
+                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        showResources
+                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                      }`}
+                      title="Mental Health Resources"
+                    >
+                      <LifeBuoy className="w-4 h-4" />
+
+                      {/* Hover tooltip */}
+                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Resources
+                      </span>
+                    </button>
+
+                    {/* Wellness Exercise Button - Minimized */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Pick a random technique if none selected
+                        if (!selectedExercise) {
+                          const randomIndex = Math.floor(
+                            Math.random() * mentalHealthTechniques.length
+                          );
+                          setSelectedExercise(
+                            mentalHealthTechniques[randomIndex].id
+                          );
+                        }
+                        setShowWellnessExercise((prev) => !prev);
+                        setShowInitialMessage(false);
+                      }}
+                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        showWellnessExercise
+                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                      }`}
+                      title="Wellness Exercises"
+                    >
+                      <Heart className="w-4 h-4" />
+
+                      {/* Hover tooltip */}
+                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Exercises
+                      </span>
+                    </button>
+
+                    {/* Coping Skills Library Button - Minimized */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCopingSkills((prev) => !prev);
+                        setShowInitialMessage(false);
+                      }}
+                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        showCopingSkills
+                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                      }`}
+                      title="Coping Skills Library"
+                    >
+                      <BookOpen className="w-4 h-4" />
+
+                      {/* Hover tooltip */}
+                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Skills
+                      </span>
+                    </button>
+
+                    {/* Mood Tracker Button - Minimized */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowMoodTracker((prev) => !prev);
+                        setShowInitialMessage(false);
+                      }}
+                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        showMoodTracker
+                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                      }`}
+                      title="Mood Tracker"
+                    >
+                      <BarChart2 className="w-4 h-4" />
+
+                      {/* Hover tooltip */}
+                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Tracker
+                      </span>
+                    </button>
+
+                    {/* Safety Plan Button - Minimized */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowSafetyPlan((prev) => !prev);
+                        setShowInitialMessage(false);
+                      }}
+                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        showSafetyPlan
+                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                      }`}
+                      title="Safety Plan"
+                    >
+                      <Shield className="w-4 h-4" />
+
+                      {/* Hover tooltip */}
+                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Safety
+                      </span>
+                    </button>
+
+                    {/* Privacy Mode Button - Minimized */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPrivacyMode((prev) => !prev);
+                        setShowInitialMessage(false);
+                      }}
+                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        showPrivacyMode
+                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
+                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
+                      }`}
+                      title="Privacy Mode"
+                    >
+                      <EyeOff className="w-4 h-4" />
+
+                      {/* Hover tooltip */}
+                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Privacy
+                      </span>
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Collapsed state indicator - only show when collapsed */}
+              {!toolsBarExpanded && (
+                <div className="h-1 border-b border-gray-50 flex justify-center">
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex space-x-1 items-center -mt-px"
+                  >
+                    <div className="w-1 h-1 rounded-full bg-gray-200"></div>
+                    <div className="w-1 h-1 rounded-full bg-gray-300"></div>
+                    <div className="w-1 h-1 rounded-full bg-gray-200"></div>
+                  </motion.div>
+                </div>
+              )}
+            </div>
             {/* Uploaded file display */}
             {uploadedFile && (
               <div className="px-6 pt-2 pb-0">
@@ -877,7 +1899,7 @@ export default function ChatPage() {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Message Genie..."
-                className="w-full bg-transparent px-6 py-4 pr-24 focus:outline-none placeholder-gray-400 text-gray-800 border-b border-gray-100"
+                className="w-full bg-transparent px-6 py-5 pr-24 focus:outline-none placeholder-gray-400 text-gray-800 border-b border-gray-100"
                 onKeyDown={handleKeyDown}
                 disabled={isLoading}
               />
@@ -893,14 +1915,53 @@ export default function ChatPage() {
                 ></div>
               )}
 
-              {/* Action buttons - aligned in a row */}
+              {/* Action buttons - aligned on the right */}
               <div className="absolute right-6 top-1/2 transform -translate-y-1/2 flex items-center gap-3">
+                {/* Voice input button with enhanced animations */}
+                <button
+                  type="button"
+                  onClick={isRecording ? stopRecording : startRecording}
+                  className={`${
+                    isRecording
+                      ? "text-red-500 recording-pulse"
+                      : processingAudio
+                      ? "text-indigo-400"
+                      : "text-gray-400 hover:text-gray-600"
+                  } transition-colors relative w-8 h-8 flex items-center justify-center`}
+                  disabled={isLoading || (processingAudio && !isRecording)}
+                  title={
+                    isRecording
+                      ? "Stop recording"
+                      : processingAudio
+                      ? "Processing voice..."
+                      : "Voice input"
+                  }
+                >
+                  {isRecording ? (
+                    <>
+                      <MicOff className="w-5 h-5" />
+                      <span className="recording-timer">
+                        {formatTime(recordingTime)}
+                      </span>
+                    </>
+                  ) : processingAudio ? (
+                    <div className="voice-processing">
+                      <div className="voice-processing-bar"></div>
+                      <div className="voice-processing-bar"></div>
+                      <div className="voice-processing-bar"></div>
+                      <div className="voice-processing-bar"></div>
+                    </div>
+                  ) : (
+                    <Mic className="w-5 h-5" />
+                  )}
+                </button>
+
                 {/* File upload button */}
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
                   className="text-gray-400 hover:text-gray-600 transition-colors"
-                  disabled={isLoading}
+                  disabled={isLoading || isRecording}
                 >
                   <Paperclip className="w-5 h-5" />
                 </button>
@@ -915,9 +1976,11 @@ export default function ChatPage() {
                 {/* Send Button */}
                 <button
                   type="submit"
-                  disabled={isLoading || (!input.trim() && !uploadedFile)}
+                  disabled={
+                    isLoading || (!input.trim() && !uploadedFile) || isRecording
+                  }
                   className={`${
-                    !isLoading && (input.trim() || uploadedFile)
+                    !isLoading && (input.trim() || uploadedFile) && !isRecording
                       ? "text-indigo-500 hover:text-indigo-600"
                       : "text-gray-300"
                   } transition-colors`}
@@ -948,6 +2011,47 @@ export default function ChatPage() {
       {/* Footer component */}
       <Footer />
 
+      <AnimatePresence>
+        {isRecording && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-32 left-1/2 transform -translate-x-1/2 z-50 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-md border border-gray-200 flex items-center gap-3"
+          >
+            <div className="w-3 h-3 rounded-full bg-red-500 animate-pulse"></div>
+            <span className="text-sm font-medium text-gray-700">
+              Recording... {formatTime(recordingTime)}
+            </span>
+            <button
+              onClick={stopRecording}
+              className="ml-2 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors"
+            >
+              <MicOff className="w-3 h-3 text-gray-600" />
+            </button>
+          </motion.div>
+        )}
+
+        {processingAudio && !isRecording && (
+          <motion.div
+            initial={{ y: 50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 50, opacity: 0 }}
+            className="fixed bottom-32 left-1/2 transform -translate-x-1/2 z-50 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-md border border-gray-200 flex items-center gap-3"
+          >
+            <div className="voice-processing scale-75">
+              <div className="voice-processing-bar"></div>
+              <div className="voice-processing-bar"></div>
+              <div className="voice-processing-bar"></div>
+              <div className="voice-processing-bar"></div>
+            </div>
+            <span className="text-sm font-medium text-gray-700">
+              Processing voice...
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* CSS for loading animation and other styles */}
       <style jsx global>{`
         /* New elegant loading animation */
@@ -957,7 +2061,7 @@ export default function ChatPage() {
           justify-content: flex-start;
           height: 20px;
         }
-        
+
         .elegant-loading .dot {
           width: 4px;
           height: 4px;
@@ -966,17 +2070,19 @@ export default function ChatPage() {
           border-radius: 50%;
           animation: elegantPulse 1.4s infinite ease-in-out;
         }
-        
+
         .elegant-loading .dot:nth-child(1) {
           animation-delay: -0.32s;
         }
-        
+
         .elegant-loading .dot:nth-child(2) {
           animation-delay: -0.16s;
         }
-        
+
         @keyframes elegantPulse {
-          0%, 80%, 100% {
+          0%,
+          80%,
+          100% {
             transform: scale(0.8);
             opacity: 0.3;
           }
@@ -995,7 +2101,7 @@ export default function ChatPage() {
           padding: 2px 6px;
           border-radius: 10px;
         }
-        
+
         .pulse {
           width: 6px;
           height: 6px;
@@ -1003,7 +2109,7 @@ export default function ChatPage() {
           border-radius: 50%;
           animation: pulse 1.5s infinite ease-in-out;
         }
-        
+
         @keyframes pulse {
           0% {
             transform: scale(0.8);
@@ -1028,22 +2134,23 @@ export default function ChatPage() {
           margin-left: 2px;
           animation: blink 0.8s infinite;
         }
-        
+
         @keyframes blink {
-          0%, 100% {
+          0%,
+          100% {
             opacity: 0;
           }
           50% {
             opacity: 1;
           }
         }
-        
+
         /* More elegant generating indicator with pulse ring */
         .elegant-generating {
           display: flex;
           align-items: center;
         }
-        
+
         .pulse-ring {
           display: inline-block;
           width: 8px;
@@ -1052,9 +2159,9 @@ export default function ChatPage() {
           border-radius: 50%;
           position: relative;
         }
-        
+
         .pulse-ring:before {
-          content: '';
+          content: "";
           position: absolute;
           left: -4px;
           top: -4px;
@@ -1064,7 +2171,7 @@ export default function ChatPage() {
           border: 2px solid rgba(99, 102, 241, 0.3);
           animation: pulse-ring 1.5s infinite;
         }
-        
+
         @keyframes pulse-ring {
           0% {
             transform: scale(0.8);
@@ -1106,7 +2213,9 @@ export default function ChatPage() {
         }
 
         @keyframes bounce {
-          0%, 80%, 100% {
+          0%,
+          80%,
+          100% {
             transform: scale(0.6);
             opacity: 0.6;
           }
@@ -1132,7 +2241,10 @@ export default function ChatPage() {
 
         /* Subtle background pattern */
         .bg-chat-pattern {
-          background-image: radial-gradient(rgba(99, 102, 241, 0.03) 1px, transparent 1px);
+          background-image: radial-gradient(
+            rgba(99, 102, 241, 0.03) 1px,
+            transparent 1px
+          );
           background-size: 20px 20px;
         }
 
@@ -1149,17 +2261,28 @@ export default function ChatPage() {
         .markdown-content {
           line-height: 1.6;
         }
-        
+
         .markdown-content p {
           margin-bottom: 0.8em;
         }
 
-        .markdown-content h1, 
-        .markdown-content h2, 
+        .markdown-content h1,
+        .markdown-content h2,
         .markdown-content h3 {
           margin-top: 1.5em;
           margin-bottom: 0.5em;
           font-weight: 500;
+        }
+
+        /* Privacy mode blur effect */
+        .privacy-blur {
+          filter: blur(5px);
+          user-select: none;
+          transition: filter 0.3s ease;
+        }
+
+        .privacy-blur:hover {
+          filter: blur(3px);
         }
       `}</style>
     </main>

@@ -7,6 +7,50 @@ export type Message = {
   timestamp?: Date
 }
 
+// New Mental Health Context tracking
+export interface MoodEntry {
+  mood: string
+  intensity: number // 1-10 scale
+  timestamp: Date
+  notes?: string
+}
+
+export interface MentalHealthContext {
+  reportedMoods: MoodEntry[]
+  mentionedSymptoms: string[]
+  techniquesRecommended: string[]
+  resourcesShared: string[]
+  lastCrisisCheck: Date | null
+  topicSensitivity: {
+    [key: string]: number // 1-5 scale of sensitivity
+  }
+  wellnessGoals: string[]
+  copingStrategiesUsed: string[]
+  supportNetwork: string[]
+  safetyPlan?: {
+    warningSigns: string[]
+    copingStrategies: string[]
+    contacts: { name: string, relationship: string, phone?: string }[]
+    resources: string[]
+    safeEnvironment: string[]
+  }
+}
+
+// Initialize empty mental health context
+function initMentalHealthContext(): MentalHealthContext {
+  return {
+    reportedMoods: [],
+    mentionedSymptoms: [],
+    techniquesRecommended: [],
+    resourcesShared: [],
+    lastCrisisCheck: null,
+    topicSensitivity: {},
+    wellnessGoals: [],
+    copingStrategiesUsed: [],
+    supportNetwork: []
+  };
+}
+
 export type ChatHistory = {
   id: number
   title: string
@@ -14,6 +58,7 @@ export type ChatHistory = {
   messages: Message[]
   pinned?: boolean
   user_id: string // Changed to snake_case to match Supabase table
+  mentalHealthContext?: MentalHealthContext
 }
 
 // Initialize Supabase client - with fallbacks for development
@@ -50,15 +95,62 @@ export const chatStore = {
         return []
       }
       
-      return data || []
+      // Initialize mental health context if it doesn't exist
+      return data?.map(chat => ({
+        ...chat,
+        mentalHealthContext: chat.mentalHealthContext || initMentalHealthContext()
+      })) || []
     } catch (err) {
       console.error('Error accessing Supabase:', err)
       return []
     }
   },
   
+  // Get a specific chat by ID
+  getChatById: async (chatId: number): Promise<ChatHistory | null> => {
+    // Fallback to localStorage if Supabase is not configured
+    if (useLocalStorageFallback) {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('chatHistory')
+        if (stored) {
+          const history = JSON.parse(stored)
+          const chat = history.find((c: ChatHistory) => c.id === chatId)
+          return chat || null
+        }
+      }
+      return null
+    }
+    
+    try {
+      const { data, error } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('id', chatId)
+        .single()
+      
+      if (error) {
+        console.error('Error fetching chat:', error)
+        return null
+      }
+      
+      // Initialize mental health context if it doesn't exist
+      return data ? {
+        ...data,
+        mentalHealthContext: data.mentalHealthContext || initMentalHealthContext()
+      } : null
+    } catch (err) {
+      console.error('Error accessing Supabase:', err)
+      return null
+    }
+  },
+  
   // Save a new chat to Supabase or localStorage fallback
   saveChat: async (chat: ChatHistory): Promise<ChatHistory | null> => {
+    // Initialize mental health context if it doesn't exist
+    if (!chat.mentalHealthContext) {
+      chat.mentalHealthContext = initMentalHealthContext()
+    }
+    
     // Fallback to localStorage if Supabase is not configured
     if (useLocalStorageFallback) {
       if (typeof window !== 'undefined') {
@@ -126,6 +218,94 @@ export const chatStore = {
     } catch (err) {
       console.error('Error accessing Supabase:', err)
       return false
+    }
+  },
+  
+  // Update mental health context specifically
+  updateMentalHealthContext: async (
+    chatId: number,
+    updates: Partial<MentalHealthContext>
+  ): Promise<boolean> => {
+    try {
+      const chat = await chatStore.getChatById(chatId);
+      if (!chat) return false;
+      
+      const currentContext = chat.mentalHealthContext || initMentalHealthContext();
+      const updatedContext = { ...currentContext, ...updates };
+      
+      return await chatStore.updateChat(chatId, { mentalHealthContext: updatedContext });
+    } catch (err) {
+      console.error('Error updating mental health context:', err);
+      return false;
+    }
+  },
+  
+  // Add a mood entry to the mental health context
+  addMoodEntry: async (
+    chatId: number,
+    mood: string,
+    intensity: number,
+    notes?: string
+  ): Promise<boolean> => {
+    try {
+      const chat = await chatStore.getChatById(chatId);
+      if (!chat) return false;
+      
+      const currentContext = chat.mentalHealthContext || initMentalHealthContext();
+      const updatedMoods = [
+        ...currentContext.reportedMoods,
+        {
+          mood,
+          intensity,
+          notes,
+          timestamp: new Date()
+        }
+      ];
+      
+      return await chatStore.updateMentalHealthContext(chatId, {
+        reportedMoods: updatedMoods
+      });
+    } catch (err) {
+      console.error('Error adding mood entry:', err);
+      return false;
+    }
+  },
+  
+  // Add a technique to the recommended techniques list
+  addRecommendedTechnique: async (
+    chatId: number,
+    technique: string
+  ): Promise<boolean> => {
+    try {
+      const chat = await chatStore.getChatById(chatId);
+      if (!chat) return false;
+      
+      const currentContext = chat.mentalHealthContext || initMentalHealthContext();
+      if (currentContext.techniquesRecommended.includes(technique)) {
+        return true; // Technique already recommended
+      }
+      
+      const updatedTechniques = [...currentContext.techniquesRecommended, technique];
+      
+      return await chatStore.updateMentalHealthContext(chatId, {
+        techniquesRecommended: updatedTechniques
+      });
+    } catch (err) {
+      console.error('Error adding recommended technique:', err);
+      return false;
+    }
+  },
+  
+  // Update or create a safety plan
+  updateSafetyPlan: async (
+    chatId: number,
+    safetyPlan: MentalHealthContext['safetyPlan']
+  ): Promise<boolean> => {
+    try {
+      return await chatStore.updateMentalHealthContext(chatId, { safetyPlan });
+    } catch (err) {
+      console.error('Error updating safety plan:', err);
+      return false;
     }
   },
   
@@ -200,16 +380,34 @@ export const chatStore = {
     }
   },
   
-  // Generate a summarized chat title
+  // Generate a summarized chat title - improved for mental health content
   generateChatTitle: (messages: Message[]): string => {
     // Get first user message as title base
     const firstUserMessage = messages.find(m => m.role === 'user')
     
     if (!firstUserMessage) {
-      return `Chat ${new Date().toLocaleString()}`
+      return `Support Chat ${new Date().toLocaleString()}`
     }
     
     const content = firstUserMessage.content
+    
+    // Look for emotional keywords to create a more relevant title
+    const emotionKeywords = [
+      'anxiety', 'anxious', 'worried', 'fear', 'stress', 'overwhelm',
+      'depression', 'depressed', 'sad', 'down', 'blue', 'hopeless',
+      'grief', 'loss', 'trauma', 'panic', 'mood', 'feeling',
+      'anger', 'angry', 'frustration', 'upset', 'emotion', 'mental'
+    ]
+    
+    // Check if any emotion keywords are in the message
+    const matchedEmotion = emotionKeywords.find(keyword => 
+      content.toLowerCase().includes(keyword)
+    )
+    
+    if (matchedEmotion) {
+      // Create a more sensitive title based on the emotion
+      return `Support: ${matchedEmotion.charAt(0).toUpperCase() + matchedEmotion.slice(1)} discussion`
+    }
     
     // For regular messages, create a smart summary
     // Split into words and take first 4-5 meaningful words
@@ -225,6 +423,6 @@ export const chatStore = {
       summary = summary.substring(0, 20) + '...'
     }
     
-    return summary || `Chat ${new Date().toLocaleString()}`
+    return summary || `Support Chat ${new Date().toLocaleString()}`
   }
 }

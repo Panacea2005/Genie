@@ -2,30 +2,52 @@
 
 import { useEffect, useState, useRef } from "react"
 import Image from "next/image"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion, AnimatePresence, useAnimation } from "framer-motion"
 
 export default function LoadingAnimation() {
+  // Animation state management
   const [showAnimation, setShowAnimation] = useState(true)
-  const [animationPhase, setAnimationPhase] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
   
-  // Animation tracking
-  const [progress, setProgress] = useState(0)
+  // Advanced animation controls
+  const flowerControls = useAnimation()
+  const sphereControls = useAnimation()
+  const pulseControls = useAnimation()
+  const backgroundControls = useAnimation()
+  const overlayControls = useAnimation()
+  const logoControls = useAnimation()
+  const particleControls = useAnimation()
+  
+  // Color transition state
   const [colorProgress, setColorProgress] = useState(0)
   
-  // Track animation frame and timeouts for cleanup
+  // Animation timeouts for cleanup
+  const timeoutsRef = useRef<Array<NodeJS.Timeout>>([])
   const animationFrameRef = useRef<number | null>(null)
-  const timeoutsRef = useRef<NodeJS.Timeout[]>([])
+  
+  // Generate particles for flower pattern
+  const particleCount = 30
+  const particles = Array.from({ length: particleCount }).map((_, i) => ({
+    id: i,
+    scale: 0.2 + Math.random() * 0.8,
+    x: Math.random() * 250 - 125,
+    y: Math.random() * 250 - 125,
+    rotation: Math.random() * 360,
+    opacity: 0.3 + Math.random() * 0.7,
+    delay: Math.random() * 1.5,
+    duration: 2 + Math.random() * 1.5,
+  }))
 
   // Smooth color transition animation
   useEffect(() => {
-    const colorDuration = 12000
+    const colorDuration = 12000 // Extended color transition duration
     const startTime = Date.now()
 
     const updateColorProgress = () => {
       const elapsed = Date.now() - startTime
       const newProgress = (elapsed % colorDuration) / colorDuration
       setColorProgress(newProgress)
+
       animationFrameRef.current = requestAnimationFrame(updateColorProgress)
     }
 
@@ -38,174 +60,189 @@ export default function LoadingAnimation() {
     }
   }, [])
 
-  // Main animation sequence with precisely designed phases
+  // Main choreographed animation sequence
   useEffect(() => {
-    const phaseDuration = 2000 // 2 seconds per phase
-    const phaseCount = 6 // total number of phases
-    const totalDuration = phaseDuration * phaseCount
-    const startTime = Date.now()
-
-    const updateAnimation = () => {
-      const elapsed = Date.now() - startTime
-      const newProgress = Math.min(elapsed / totalDuration, 1)
-      setProgress(newProgress)
-
-      // Calculate current phase (0-5)
-      const currentPhase = Math.min(Math.floor(newProgress * phaseCount), phaseCount - 1)
-      
-      if (currentPhase !== animationPhase) {
-        setAnimationPhase(currentPhase)
-        
-        // Log phase changes for debugging
-        console.log(`Animation phase changed to: ${currentPhase} at progress: ${newProgress.toFixed(2)}`)
-        
-        // If final phase reached, prepare to end animation
-        if (currentPhase === phaseCount - 1) {
-          const timeout = setTimeout(() => {
-            setShowAnimation(false)
-          }, phaseDuration)
-          timeoutsRef.current.push(timeout)
+    const animationSequence = async () => {
+      // 1. Start with flower pattern animation
+      flowerControls.start({
+        opacity: 1,
+        scale: 1,
+        rotate: 360,
+        transition: { 
+          opacity: { duration: 1.2, ease: "easeInOut" },
+          scale: { duration: 1.5, ease: [0.34, 1.56, 0.64, 1] },
+          rotate: { duration: 3, ease: "easeInOut" }
         }
-      }
-
-      if (newProgress < 1) {
-        animationFrameRef.current = requestAnimationFrame(updateAnimation)
-      }
+      })
+      
+      // Start particle effect around flower
+      particleControls.start({
+        opacity: 1,
+        transition: { duration: 1, ease: "easeInOut" }
+      })
+      
+      // Small pause to show flower pattern
+      await new Promise(resolve => {
+        const timeout = setTimeout(resolve, 2000)
+        timeoutsRef.current.push(timeout)
+      })
+      
+      // 2. Flower transforms into sphere - shrink flower as sphere grows
+      flowerControls.start({
+        opacity: [1, 0.7, 0.3, 0],
+        scale: [1, 0.9, 0.6, 0.3],
+        rotate: 540,
+        transition: { 
+          duration: 2.5, 
+          ease: "easeInOut",
+        }
+      })
+      
+      // Sphere emerges from center of flower
+      sphereControls.start({
+        scale: [0, 0.5, 0.9, 1],
+        opacity: [0, 0.3, 0.7, 1],
+        transition: { 
+          duration: 2.5,
+          ease: [0.34, 1.56, 0.64, 1],
+          times: [0, 0.2, 0.6, 1]
+        }
+      })
+      
+      // Particles gradually fade out
+      particleControls.start({
+        opacity: [1, 0.7, 0.3, 0],
+        scale: [1, 0.8, 0.5, 0.2],
+        transition: { 
+          duration: 2.5,
+          ease: "easeInOut",
+        }
+      })
+      
+      // Start pulse effect in sphere
+      pulseControls.start({
+        scale: [0.8, 1.2, 0.8],
+        opacity: [0.3, 0.5, 0.3],
+        transition: { 
+          duration: 3, 
+          ease: "easeInOut",
+          repeat: Infinity,
+          repeatType: "loop"
+        }
+      })
+      
+      // Wait for sphere to fully form
+      await new Promise(resolve => {
+        const timeout = setTimeout(resolve, 2000)
+        timeoutsRef.current.push(timeout)
+      })
+      
+      // 3. Sphere expands
+      sphereControls.start({
+        scale: [1, 1.5, 3, 5, 10],
+        opacity: [1, 1, 0.8, 0.5, 0],
+        transition: { 
+          scale: { 
+            duration: 3, 
+            ease: [0.23, 1, 0.32, 1],
+            times: [0, 0.2, 0.5, 0.8, 1]
+          },
+          opacity: { 
+            duration: 3, 
+            ease: "easeInOut",
+            times: [0, 0.3, 0.6, 0.8, 1]
+          }
+        }
+      })
+      
+      // Background gradient fades in as sphere expands
+      backgroundControls.start({
+        opacity: 1,
+        transition: { duration: 2, ease: "easeInOut", delay: 0.5 }
+      })
+      
+      // Wait for sphere expansion
+      await new Promise(resolve => {
+        const timeout = setTimeout(resolve, 1500)
+        timeoutsRef.current.push(timeout)
+      })
+      
+      // 4. Show Genie logo
+      logoControls.start({
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        transition: { 
+          duration: 1, 
+          ease: [0.34, 1.56, 0.64, 1]
+        }
+      })
+      
+      // Small pause to show logo
+      await new Promise(resolve => {
+        const timeout = setTimeout(resolve, 1000)
+        timeoutsRef.current.push(timeout)
+      })
+      
+      // 5. Fade to white to transition to app
+      overlayControls.start({
+        opacity: 1,
+        transition: { duration: 1.8, ease: "easeInOut" }
+      })
+      
+      // Final pause before completing
+      await new Promise(resolve => {
+        const timeout = setTimeout(resolve, 1500)
+        timeoutsRef.current.push(timeout)
+      })
+      
+      // Animation complete
+      setShowAnimation(false)
     }
-
-    animationFrameRef.current = requestAnimationFrame(updateAnimation)
-
+    
+    // Start the animation sequence
+    animationSequence()
+    
+    // Clean up timeouts and animation frames on unmount
     return () => {
+      timeoutsRef.current.forEach(clearTimeout)
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
-      timeoutsRef.current.forEach(clearTimeout)
     }
-  }, [animationPhase])
+  }, [flowerControls, sphereControls, backgroundControls, overlayControls, pulseControls, logoControls, particleControls])
 
-  // Particle generator for flower pattern
-  const createParticles = (count: number) => {
-    return Array.from({ length: count }).map((_, i) => ({
-      id: i,
-      scale: 0.2 + Math.random() * 0.8,
-      x: Math.random() * 250 - 125,
-      y: Math.random() * 250 - 125,
-      rotation: Math.random() * 360,
-      opacity: 0.3 + Math.random() * 0.7,
-      delay: Math.random() * 1.5,
-      duration: 2 + Math.random() * 1.5,
-    }))
+  // Advanced color interpolation function
+  const interpolateColor = (color1: string, color2: string, factor: number) => {
+    // Convert hex to RGB
+    const hex2rgb = (hex: string) => {
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      return [r, g, b]
+    }
+    
+    // Apply easing to factor
+    const easedFactor = 0.5 - Math.cos(factor * Math.PI) / 2
+    
+    // Convert colors and interpolate
+    const [r1, g1, b1] = hex2rgb(color1)
+    const [r2, g2, b2] = hex2rgb(color2)
+    
+    const r = Math.round(r1 + (r2 - r1) * easedFactor)
+    const g = Math.round(g1 + (g2 - g1) * easedFactor)
+    const b = Math.round(b1 + (b2 - b1) * easedFactor)
+    
+    return `rgb(${r}, ${g}, ${b})`
   }
   
-  const particles = createParticles(30)
-
-  // Background particles for fullscreen phase
-  const backgroundParticles = Array.from({ length: 15 }).map((_, i) => ({
-    id: i,
-    size: 10 + Math.random() * 40,
-    positions: [
-      { x: Math.random() * 100, y: Math.random() * 100 },
-      { x: Math.random() * 100, y: Math.random() * 100 },
-      { x: Math.random() * 100, y: Math.random() * 100 }
-    ],
-    delay: Math.random() * 2,
-    duration: 8 + Math.random() * 7,
-  }))
-
-  // Dynamic gradient styles
-  const getSphereStyle = () => {
-    // Base sphere size based on phase
-    const size = animationPhase === 3 ? 240 : 32 // px
-
-    // Base styles
-    return {
-      width: `${size}px`,
-      height: `${size}px`,
-      background: `radial-gradient(circle, 
-        rgba(188,212,255,1) 0%, 
-        rgba(222,187,255,0.8) 55%, 
-        rgba(252,187,227,0.6) 100%)`,
-      filter: `blur(${4 + Math.sin(colorProgress * Math.PI * 4) * 2}px)`,
-      boxShadow: '0 0 60px rgba(255, 255, 255, 0.3)',
-      transition: 'all 2s cubic-bezier(0.34, 1.56, 0.64, 1)'
-    }
-  }
-
-  // Custom animations for each phase
-  const getFlowerAnimation = () => {
-    switch (animationPhase) {
-      case 0: // Initial appear
-        return { 
-          opacity: [0, 1], 
-          scale: [0.2, 1], 
-          rotate: [-30, 0],
-          transition: { duration: 2, ease: [0.34, 1.56, 0.64, 1] }
-        }
-      case 1: // Rotate
-        return { 
-          opacity: 1, 
-          scale: 1, 
-          rotate: [0, 360],
-          transition: { duration: 2, ease: "easeInOut" }
-        }
-      case 2: // Shrink to nothing
-        return { 
-          opacity: [1, 0.7, 0.3, 0], 
-          scale: [1, 0.8, 0.4, 0], 
-          rotate: [0, 120, 240, 360],
-          transition: { duration: 2, ease: "easeInOut" }
-        }
-      default: 
-        return { opacity: 0, scale: 0 }
-    }
-  }
-
-  const getSphereAnimation = () => {
-    switch (animationPhase) {
-      case 3: // Emerge
-        return { 
-          opacity: [0, 0.5, 1], 
-          scale: [0, 0.5, 1],
-          transition: { 
-            duration: 2, 
-            ease: [0.34, 1.56, 0.64, 1],
-            times: [0, 0.3, 1]
-          }
-        }
-      case 4: // Expand to fullscreen
-        return { 
-          opacity: [1, 0.8, 0.4, 0], 
-          scale: [1, 5, 12, 20],
-          transition: { 
-            duration: 2, 
-            ease: [0.23, 1, 0.32, 1],
-            times: [0, 0.3, 0.7, 1]
-          }
-        }
-      default:
-        return { opacity: 0, scale: 0 }
-    }
-  }
-
-  // Special styles for fullscreen gradient
-  const getFullscreenStyle = () => {
-    return {
-      opacity: animationPhase === 4 ? 1 : animationPhase === 5 ? 0.7 : 0,
-      background: `linear-gradient(${135 + colorProgress * 90}deg, 
-        rgba(252,187,227,0.4) 0%, 
-        rgba(222,187,255,0.3) 50%, 
-        rgba(188,212,255,0.2) 100%)`,
-      transition: 'opacity 2s ease-in-out'
-    }
-  }
-
-  // Final white overlay style
-  const getFinalOverlayStyle = () => {
-    return {
-      opacity: animationPhase === 5 ? 1 : 0,
-      background: 'radial-gradient(circle, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%)',
-      transition: 'opacity 2s ease-in-out'
-    }
+  // Dynamic sphere gradient styles
+  const sphereGradient = {
+    background: `radial-gradient(circle, 
+      ${interpolateColor("#c084fc", "#93c5fd", colorProgress)} 0%, 
+      ${interpolateColor("#60a5fa", "#818cf8", colorProgress)} 50%, 
+      ${interpolateColor("#93c5fd", "#c084fc", colorProgress)} 100%)`,
+    filter: `blur(${4 + Math.sin(colorProgress * Math.PI * 4) * 2}px)`,
   }
 
   if (!showAnimation) {
@@ -223,11 +260,11 @@ export default function LoadingAnimation() {
           exit={{ opacity: 0 }}
           transition={{ duration: 0.8 }}
         >
-          {/* PHASE 0-2: Flower pattern */}
+          {/* Flower pattern that transforms into sphere */}
           <motion.div
             className="absolute w-40 h-40 z-10"
             initial={{ opacity: 0, scale: 0.2, rotate: -30 }}
-            animate={getFlowerAnimation()}
+            animate={flowerControls}
           >
             <Image
               src="/images/flower-pattern.png"
@@ -235,13 +272,15 @@ export default function LoadingAnimation() {
               width={200}
               height={200}
               className="w-full h-full"
-              style={{ 
-                filter: "drop-shadow(0 0 8px rgba(255,255,255,0.5))"
-              }}
+              style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,0.5))" }}
             />
             
-            {/* Particle effect */}
-            <div className="absolute inset-0">
+            {/* Particle effect around flower */}
+            <motion.div
+              className="absolute w-full h-full"
+              initial={{ opacity: 0 }}
+              animate={particleControls}
+            >
               {particles.map((particle) => (
                 <motion.div
                   key={particle.id}
@@ -260,8 +299,8 @@ export default function LoadingAnimation() {
                   animate={{ 
                     x: particle.x, 
                     y: particle.y, 
-                    scale: animationPhase < 3 ? particle.scale : 0,
-                    opacity: animationPhase < 3 ? [0, particle.opacity, 0] : 0,
+                    scale: particle.scale,
+                    opacity: [0, particle.opacity, 0],
                     rotate: particle.rotation 
                   }}
                   transition={{ 
@@ -273,119 +312,143 @@ export default function LoadingAnimation() {
                   }}
                 />
               ))}
+            </motion.div>
+          </motion.div>
+          
+          {/* Sphere that emerges from flower */}
+          <motion.div
+            className="absolute rounded-full z-20 w-40 h-40"
+            style={sphereGradient}
+            initial={{ scale: 0, opacity: 0 }}
+            animate={sphereControls}
+          >
+            {/* Animated inner gradients for depth */}
+            <motion.div 
+              className="absolute inset-0 rounded-full"
+              animate={{
+                rotate: 360,
+              }}
+              transition={{
+                duration: 20,
+                repeat: Infinity,
+                ease: "linear"
+              }}
+            >
+              <div 
+                className="absolute inset-0 rounded-full" 
+                style={{ 
+                  background: "radial-gradient(circle at 60% 40%, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 60%)",
+                  opacity: 0.7
+                }} 
+              />
+            </motion.div>
+            
+            {/* Pulse effect */}
+            <motion.div 
+              className="absolute inset-0 rounded-full bg-white/20"
+              initial={{ scale: 0.8, opacity: 0.3 }}
+              animate={pulseControls}
+            />
+            
+            {/* Second pulse with offset timing */}
+            <motion.div 
+              className="absolute inset-0 rounded-full bg-white/10"
+              initial={{ scale: 0.8, opacity: 0.2 }}
+              animate={{
+                scale: [0.6, 1, 0.6],
+                opacity: [0.2, 0.4, 0.2]
+              }}
+              transition={{
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+                delay: 1
+              }}
+            />
+          </motion.div>
+          
+          {/* Genie logo that appears later */}
+          <motion.div
+            className="absolute z-30"
+            initial={{ opacity: 0, y: 10, scale: 0.9 }}
+            animate={logoControls}
+          >
+            <div className="flex flex-col items-center">
+              {/* Mini sphere icon */}
+              <div className="w-6 h-6 mb-3 rounded-full relative overflow-hidden" style={{ 
+                background: "linear-gradient(135deg, #e0f2ff 0%, #d8d6ff 45%, #f0d5ff 100%)"
+              }}>
+                <div className="absolute inset-0 rounded-full bg-white/40" style={{ filter: "blur(1px)" }} />
+                <div className="absolute top-0 left-0 w-full h-full rounded-full" style={{ 
+                  background: "linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.2) 100%)",
+                  opacity: 0.7
+                }} />
+              </div>
+              
+              {/* Genie text */}
+              <div className="text-xl text-white/90 font-light tracking-wide">
+                Genie
+              </div>
             </div>
           </motion.div>
-
-          {/* PHASE 3-4: Sphere */}
-          <motion.div
-            className="absolute rounded-full z-20"
-            style={getSphereStyle()}
-            initial={{ opacity: 0, scale: 0 }}
-            animate={getSphereAnimation()}
-          >
-            {/* Inner pulse effect */}
-            {(animationPhase === 3 || animationPhase === 4) && (
-              <>
-                <motion.div 
-                  className="absolute inset-0 rounded-full bg-white/30"
-                  animate={{
-                    scale: [0.7, 1.2, 0.7],
-                    opacity: [0.1, 0.5, 0.1]
-                  }}
-                  transition={{
-                    duration: 3,
-                    repeat: Infinity,
-                    ease: "easeInOut"
-                  }}
-                />
-                
-                <motion.div 
-                  className="absolute inset-0 rounded-full bg-white/10"
-                  animate={{
-                    scale: [0.5, 1.3, 0.5],
-                    opacity: [0.1, 0.3, 0.1]
-                  }}
-                  transition={{
-                    duration: 4,
-                    repeat: Infinity,
-                    ease: "easeInOut",
-                    delay: 0.5
-                  }}
-                />
-                
-                {/* Light reflection */}
-                <motion.div 
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    background: "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 50%)"
-                  }}
-                  animate={{
-                    rotate: 360
-                  }}
-                  transition={{
-                    duration: 10,
-                    repeat: Infinity,
-                    ease: "linear"
-                  }}
-                />
-              </>
-            )}
-          </motion.div>
-
-          {/* PHASE 4-5: Fullscreen gradient */}
+          
+          {/* Background gradient overlay */}
           <motion.div 
-            className="absolute inset-0 z-30"
-            style={getFullscreenStyle()}
+            className="absolute inset-0 z-25"
+            initial={{ opacity: 0 }}
+            animate={backgroundControls}
+            style={{
+              background: "linear-gradient(135deg, rgba(188,212,255,0.4) 0%, rgba(222,187,255,0.3) 50%, rgba(252,187,227,0.2) 100%)",
+            }}
           >
             {/* Floating light particles */}
-            {backgroundParticles.map((particle, i) => (
+            {Array.from({ length: 12 }).map((_, i) => (
               <motion.div 
                 key={i}
-                className="absolute rounded-full bg-white/60 blur-md"
+                className="absolute rounded-full bg-white/40"
                 style={{
-                  width: particle.size,
-                  height: particle.size,
+                  width: 10 + Math.random() * 40,
+                  height: 10 + Math.random() * 40,
+                  filter: "blur(8px)"
                 }}
                 initial={{
-                  x: `${particle.positions[0].x}%`,
-                  y: `${particle.positions[0].y}%`,
+                  x: `${Math.random() * 100}%`,
+                  y: `${Math.random() * 100}%`,
                   opacity: 0,
                 }}
-                animate={
-                  animationPhase >= 4 ? {
-                    x: [
-                      `${particle.positions[0].x}%`, 
-                      `${particle.positions[1].x}%`, 
-                      `${particle.positions[2].x}%`
-                    ],
-                    y: [
-                      `${particle.positions[0].y}%`, 
-                      `${particle.positions[1].y}%`, 
-                      `${particle.positions[2].y}%`
-                    ],
-                    opacity: [0, 0.5, 0],
-                    scale: [0.8, 1.2, 0.8]
-                  } : { opacity: 0 }
-                }
+                animate={{
+                  x: [
+                    `${Math.random() * 100}%`, 
+                    `${Math.random() * 100}%`, 
+                    `${Math.random() * 100}%`
+                  ],
+                  y: [
+                    `${Math.random() * 100}%`, 
+                    `${Math.random() * 100}%`, 
+                    `${Math.random() * 100}%`
+                  ],
+                  opacity: [0, 0.4, 0],
+                  scale: [0.8, 1.2, 0.8]
+                }}
                 transition={{
-                  duration: particle.duration,
+                  duration: 8 + Math.random() * 7,
+                  delay: Math.random() * 2,
                   ease: "easeInOut",
-                  delay: particle.delay
+                  times: [0, 0.5, 1]
                 }}
               />
             ))}
           </motion.div>
           
-          {/* PHASE 5: Final white overlay */}
+          {/* Final white overlay for transition to app */}
           <motion.div 
             className="absolute inset-0 z-40"
-            style={getFinalOverlayStyle()}
+            initial={{ opacity: 0 }}
+            animate={overlayControls}
+            style={{
+              background: "radial-gradient(circle, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%)"
+            }}
           />
-          
-          {/* Debug indicator - remove in production */}
-          {/* <div className="absolute bottom-4 left-4 bg-black/50 text-white px-2 py-1 rounded-md text-xs z-50">
-            Phase: {animationPhase} | Progress: {(progress * 100).toFixed(0)}%
-          </div> */}
         </motion.div>
       )}
     </AnimatePresence>
