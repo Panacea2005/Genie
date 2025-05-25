@@ -40,7 +40,7 @@ const sections = [
     id: 'growth',
     prompt: 'How can I become more confident in social settings?',
     title: 'Genie understands your desire for growth.',
-    iconText: '★',
+    iconText: '❀',
     labelText: 'Growth',
     cardTitle: 'Building Social Confidence',
     cardSubtitle: 'Practice, Presence, Progress',
@@ -249,8 +249,8 @@ export default function Home() {
       {/* Navbar component */}
       <Navbar currentPage="home" />
 
-      {/* Main content - full screen */}
-      <div className="flex-1 flex flex-col items-center justify-center">
+      {/* Main content - adjusted to leave space for footer */}
+      <div className="flex-1 flex flex-col items-center justify-center" style={{ maxHeight: 'calc(100vh - 120px)' }}>
         <div className="flex flex-col items-center max-w-2xl w-full px-4">
           <AnimatePresence mode="wait">
             {/* Logo and label */}
@@ -569,7 +569,9 @@ export default function Home() {
       </AnimatePresence>
 
       {/* Footer stays at bottom */}
-      <Footer />
+      <div className="relative z-10">
+        <Footer />
+      </div>
     </main>
   )
 }

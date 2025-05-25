@@ -5,6 +5,8 @@ export type Message = {
   role: "user" | "assistant" | "system"
   content: string
   timestamp?: Date
+  tokens?: number
+  speed?: string
 }
 
 // New Mental Health Context tracking
@@ -57,28 +59,20 @@ export type ChatHistory = {
   date: string
   messages: Message[]
   pinned?: boolean
-  user_id: string // Changed to snake_case to match Supabase table
+  user_id: string // This will be a UUID string
   mentalHealthContext?: MentalHealthContext
 }
 
-// Initialize Supabase client - with fallbacks for development
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project-id.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key-placeholder'
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// For development fallback when Supabase isn't configured
-const useLocalStorageFallback = supabaseUrl.includes('your-project-id')
-
 export const chatStore = {
-  // Get chat history from Supabase or localStorage fallback
+  // Get chat history from Supabase
   getChatHistory: async (userId: string): Promise<ChatHistory[]> => {
-    // Fallback to localStorage if Supabase is not configured
-    if (useLocalStorageFallback) {
-      console.warn('Using localStorage fallback instead of Supabase. Please configure Supabase.')
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('chatHistory')
-        return stored ? JSON.parse(stored) : []
-      }
+    if (!userId) {
+      console.error('No user ID provided')
       return []
     }
     
@@ -86,7 +80,7 @@ export const chatStore = {
       const { data, error } = await supabase
         .from('chats')
         .select('*')
-        .eq('user_id', userId) // Changed to snake_case
+        .eq('user_id', userId)
         .order('pinned', { ascending: false })
         .order('created_at', { ascending: false })
       
@@ -98,7 +92,7 @@ export const chatStore = {
       // Initialize mental health context if it doesn't exist
       return data?.map(chat => ({
         ...chat,
-        mentalHealthContext: chat.mentalHealthContext || initMentalHealthContext()
+        mentalHealthContext: chat.mental_health_context || initMentalHealthContext()
       })) || []
     } catch (err) {
       console.error('Error accessing Supabase:', err)
@@ -108,19 +102,6 @@ export const chatStore = {
   
   // Get a specific chat by ID
   getChatById: async (chatId: number): Promise<ChatHistory | null> => {
-    // Fallback to localStorage if Supabase is not configured
-    if (useLocalStorageFallback) {
-      if (typeof window !== 'undefined') {
-        const stored = localStorage.getItem('chatHistory')
-        if (stored) {
-          const history = JSON.parse(stored)
-          const chat = history.find((c: ChatHistory) => c.id === chatId)
-          return chat || null
-        }
-      }
-      return null
-    }
-    
     try {
       const { data, error } = await supabase
         .from('chats')
@@ -136,7 +117,7 @@ export const chatStore = {
       // Initialize mental health context if it doesn't exist
       return data ? {
         ...data,
-        mentalHealthContext: data.mentalHealthContext || initMentalHealthContext()
+        mentalHealthContext: data.mental_health_context || initMentalHealthContext()
       } : null
     } catch (err) {
       console.error('Error accessing Supabase:', err)
@@ -144,39 +125,52 @@ export const chatStore = {
     }
   },
   
-  // Save a new chat to Supabase or localStorage fallback
+  // Save a new chat to Supabase
   saveChat: async (chat: ChatHistory): Promise<ChatHistory | null> => {
+    if (!chat.user_id) {
+      console.error('No user ID provided for new chat')
+      return null
+    }
+    
     // Initialize mental health context if it doesn't exist
     if (!chat.mentalHealthContext) {
       chat.mentalHealthContext = initMentalHealthContext()
     }
     
-    // Fallback to localStorage if Supabase is not configured
-    if (useLocalStorageFallback) {
-      if (typeof window !== 'undefined') {
-        // Get current history from localStorage
-        const stored = localStorage.getItem('chatHistory')
-        const history = stored ? JSON.parse(stored) : []
-        
-        // Add new chat to history
-        const updatedHistory = [chat, ...history.filter((c: ChatHistory) => c.id !== chat.id)]
-        localStorage.setItem('chatHistory', JSON.stringify(updatedHistory))
-        return chat
-      }
-      return null
-    }
-    
     try {
+      // Log what we're trying to insert for debugging
+      const insertData = {
+        title: chat.title,
+        date: chat.date,
+        messages: chat.messages,
+        user_id: chat.user_id,
+        pinned: chat.pinned || false,
+        mental_health_context: chat.mentalHealthContext
+      }
+      
+      console.log('Attempting to insert chat with data:', {
+        ...insertData,
+        messages: `${insertData.messages.length} messages`,
+        user_id: insertData.user_id
+      })
+      
       const { data, error } = await supabase
         .from('chats')
-        .insert([chat])
+        .insert([insertData])
         .select()
       
       if (error) {
         console.error('Error saving chat:', error)
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
         return null
       }
       
+      console.log('Chat saved successfully:', data?.[0])
       return data?.[0] || null
     } catch (err) {
       console.error('Error accessing Supabase:', err)
@@ -184,29 +178,23 @@ export const chatStore = {
     }
   },
   
-  // Update an existing chat in Supabase or localStorage fallback
+  // Update an existing chat in Supabase
   updateChat: async (id: number, updates: Partial<ChatHistory>): Promise<boolean> => {
-    // Fallback to localStorage if Supabase is not configured
-    if (useLocalStorageFallback) {
-      if (typeof window !== 'undefined') {
-        const storedHistory = localStorage.getItem('chatHistory')
-        if (storedHistory) {
-          const history = JSON.parse(storedHistory)
-          const chatIndex = history.findIndex((c: { id: number }) => c.id === id)
-          if (chatIndex >= 0) {
-            history[chatIndex] = { ...history[chatIndex], ...updates }
-            localStorage.setItem('chatHistory', JSON.stringify(history))
-            return true
-          }
-        }
-      }
-      return false
-    }
-    
     try {
+      // Prepare the update object with the correct column names
+      const updateObject: any = {}
+      
+      if (updates.title !== undefined) updateObject.title = updates.title
+      if (updates.date !== undefined) updateObject.date = updates.date
+      if (updates.messages !== undefined) updateObject.messages = updates.messages
+      if (updates.pinned !== undefined) updateObject.pinned = updates.pinned
+      if (updates.mentalHealthContext !== undefined) {
+        updateObject.mental_health_context = updates.mentalHealthContext
+      }
+      
       const { error } = await supabase
         .from('chats')
-        .update(updates)
+        .update(updateObject)
         .eq('id', id)
       
       if (error) {
@@ -309,22 +297,8 @@ export const chatStore = {
     }
   },
   
-  // Delete a chat from Supabase or localStorage fallback
+  // Delete a chat from Supabase
   deleteChat: async (id: number): Promise<boolean> => {
-    // Fallback to localStorage if Supabase is not configured
-    if (useLocalStorageFallback) {
-      if (typeof window !== 'undefined') {
-        const storedHistory = localStorage.getItem('chatHistory')
-        if (storedHistory) {
-          const history = JSON.parse(storedHistory)
-          const updatedHistory = history.filter((c: { id: number }) => c.id !== id)
-          localStorage.setItem('chatHistory', JSON.stringify(updatedHistory))
-          return true
-        }
-      }
-      return false
-    }
-    
     try {
       const { error } = await supabase
         .from('chats')
@@ -343,25 +317,8 @@ export const chatStore = {
     }
   },
   
-  // Toggle pinned status in Supabase or localStorage fallback
+  // Toggle pinned status in Supabase
   pinChat: async (id: number, currentPinned: boolean): Promise<boolean> => {
-    // Fallback to localStorage if Supabase is not configured
-    if (useLocalStorageFallback) {
-      if (typeof window !== 'undefined') {
-        const storedHistory = localStorage.getItem('chatHistory')
-        if (storedHistory) {
-          const history = JSON.parse(storedHistory)
-          const chatIndex = history.findIndex((c: { id: number }) => c.id === id)
-          if (chatIndex >= 0) {
-            history[chatIndex].pinned = !currentPinned
-            localStorage.setItem('chatHistory', JSON.stringify(history))
-            return true
-          }
-        }
-      }
-      return false
-    }
-    
     try {
       const { error } = await supabase
         .from('chats')

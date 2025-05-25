@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/app/contexts/AuthContext"; // ADD THIS IMPORT
 import {
   Send,
   Clipboard,
@@ -30,6 +32,8 @@ import {
   MicOff,
   ChevronUp,
   SmilePlus,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import {
@@ -52,6 +56,7 @@ import SafetyPlan from "@/components/chat/safety-plan";
 import CopingSkillsLibrary from "@/components/chat/coping-skills-library";
 import CrisisAlert from "@/components/chat/crisis-alert";
 import ModelSelector from "@/components/chat/model-selector";
+import VoiceSelector from "@/components/chat/voice-selector";
 import {
   mentalHealthTechniques,
   getTechniqueById,
@@ -62,6 +67,7 @@ import {
   detectTriggeringContent,
 } from "@/lib/services/mentalHealthUtils";
 import Groq from "groq-sdk";
+import { getTTSService } from "@/lib/services/ttsService";
 
 // Import Navigation component
 const Navbar = dynamic(() => import("@/components/navbar"), {
@@ -84,8 +90,16 @@ type Message = BaseMessage & {
 };
 
 export default function ChatPage() {
-  // You can replace this with actual auth later
-  const userId = "anonymous-user";
+  // CHANGE: Get the authenticated user from AuthContext
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  // CHANGE: Redirect to auth if not logged in
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/auth");
+    }
+  }, [user, loading, router]);
 
   // State management for chat functionality
   const [mounted, setMounted] = useState(false);
@@ -103,10 +117,15 @@ export default function ChatPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [toolsBarExpanded, setToolsBarExpanded] = useState(true);
   const [copied, setCopied] = useState(false);
-  const [activeChat, setActiveChat] = useState<number | null>(null); // For hover state
-  const [isLoadingChats, setIsLoadingChats] = useState(true); // Add loading state for chats
+  const [speakingMessageIndex, setSpeakingMessageIndex] = useState<
+    number | null
+  >(null);
+  const [selectedVoice, setSelectedVoice] =
+    useState<SpeechSynthesisVoice | null>(null);
+  const [activeChat, setActiveChat] = useState<number | null>(null);
+  const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [generatingText, setGeneratingText] = useState(false);
-  const [allMessages, setAllMessages] = useState<Message[]>([]); // For storing all messages including user messages
+  const [allMessages, setAllMessages] = useState<Message[]>([]);
 
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -138,16 +157,38 @@ export default function ChatPage() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const ttsServiceRef = useRef(getTTSService());
 
-  // Load initial data
+  // CHANGE: Load initial data - only when user is available
   useEffect(() => {
+    if (!user) return;
+
     setMounted(true);
+
+    // ADD THIS NEW CODE - Load saved voice preference
+    const savedVoiceName = localStorage.getItem("preferredVoice");
+    if (savedVoiceName && "speechSynthesis" in window) {
+      const loadSavedVoice = () => {
+        const voices = window.speechSynthesis.getVoices();
+        const savedVoice = voices.find((v) => v.name === savedVoiceName);
+        if (savedVoice) {
+          setSelectedVoice(savedVoice);
+        }
+      };
+
+      // Try loading immediately
+      loadSavedVoice();
+
+      // Also listen for voices changed event
+      window.speechSynthesis.onvoiceschanged = loadSavedVoice;
+    }
+    // END OF NEW CODE
 
     // Load chat history from Supabase on component mount
     const loadChatHistory = async () => {
       try {
         setIsLoadingChats(true);
-        const history = await chatStore.getChatHistory(userId);
+        const history = await chatStore.getChatHistory(user.id); // CHANGE: Use user.id
         setChatHistory(history);
       } catch (error) {
         console.error("Error loading chat history:", error);
@@ -157,7 +198,7 @@ export default function ChatPage() {
     };
 
     loadChatHistory();
-  }, [userId]);
+  }, [user]); // CHANGE: Depend on user
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -167,7 +208,10 @@ export default function ChatPage() {
     }
   }, [messages, allMessages]);
 
+  // CHANGE: Second useEffect for tools bar - also check for user
   useEffect(() => {
+    if (!user) return;
+
     setMounted(true);
 
     // Load tools bar state from localStorage
@@ -180,7 +224,7 @@ export default function ChatPage() {
     const loadChatHistory = async () => {
       try {
         setIsLoadingChats(true);
-        const history = await chatStore.getChatHistory(userId);
+        const history = await chatStore.getChatHistory(user.id); // CHANGE: Use user.id
         setChatHistory(history);
       } catch (error) {
         console.error("Error loading chat history:", error);
@@ -190,9 +234,9 @@ export default function ChatPage() {
     };
 
     loadChatHistory();
-  }, [userId]);
+  }, [user]); // CHANGE: Depend on user
 
-  // 3. Add this handler function for the tools bar toggle:
+  // Handler for tools bar toggle
   const handleToolsBarToggle = (
     expanded: boolean | ((prevState: boolean) => boolean)
   ) => {
@@ -225,11 +269,9 @@ export default function ChatPage() {
         setRecordingTime((prevTime) => prevTime + 1);
       }, 1000);
 
-      // Show a toast or notification that recording has started
       console.log("Recording started...");
     } catch (error) {
       console.error("Error starting recording:", error);
-      // Show error notification
     }
   };
 
@@ -258,18 +300,14 @@ export default function ChatPage() {
       console.log("Processing audio...");
       setProcessingAudio(true);
 
-      // Create a fallback in case the API call fails
       let transcribedText = "";
 
       try {
-        // DIRECT APPROACH: Call Groq API directly from the client
-        // This is a temporary workaround - in production, you should use your backend
         const groq = new Groq({
           apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || "",
-          dangerouslyAllowBrowser: true, // Enabling for client-side use
+          dangerouslyAllowBrowser: true,
         });
 
-        // Convert base64 to blob
         const binaryData = atob(base64Audio);
         const bytes = new Uint8Array(binaryData.length);
         for (let i = 0; i < binaryData.length; i++) {
@@ -278,7 +316,6 @@ export default function ChatPage() {
         const blob = new Blob([bytes], { type: "audio/webm" });
         const file = new File([blob], "recording.webm", { type: "audio/webm" });
 
-        // Call Groq API directly
         const response = await groq.audio.transcriptions.create({
           model: "whisper-large-v3-turbo",
           file: file,
@@ -290,7 +327,6 @@ export default function ChatPage() {
       } catch (apiError) {
         console.error("Direct API call failed:", apiError);
 
-        // FALLBACK: Try through your backend API
         try {
           const response = await fetch("/api/transcribe", {
             method: "POST",
@@ -314,21 +350,17 @@ export default function ChatPage() {
           console.log("Backend transcription successful:", transcribedText);
         } catch (backendError) {
           console.error("Backend API call failed:", backendError);
-
-          // ULTIMATE FALLBACK: Use a mock response
           transcribedText =
             "I couldn't transcribe your audio. Please try typing your message.";
         }
       }
 
-      // Handle empty transcription
       if (!transcribedText.trim()) {
         console.warn("Empty transcription result");
         transcribedText =
           "I couldn't capture your voice clearly. Please try again or type your message.";
       }
 
-      // Update the input field with the transcribed text
       setInput((prev) => {
         const trimmedPrev = prev.trim();
         const newText = trimmedPrev
@@ -338,7 +370,6 @@ export default function ChatPage() {
         return newText;
       });
 
-      // Focus the input field
       setTimeout(() => {
         if (inputRef.current) {
           inputRef.current.focus();
@@ -346,7 +377,6 @@ export default function ChatPage() {
       }, 100);
     } catch (error) {
       console.error("Error in processAudio:", error);
-      // Add a fallback text to the input
       setInput((prev) => {
         return prev + " [Voice transcription failed]";
       });
@@ -355,20 +385,18 @@ export default function ChatPage() {
     }
   };
 
-  // Simplified handleAudioStop function to work with the new processAudio
   const handleAudioStop = async () => {
     try {
       const audioBlob = new Blob(audioChunksRef.current, {
         type: "audio/webm",
       });
 
-      // Get the audio as base64
       const reader = new FileReader();
       reader.readAsDataURL(audioBlob);
 
       reader.onloadend = async () => {
         const base64String = reader.result?.toString() || "";
-        const base64Audio = base64String.split(",")[1]; // Remove the data URL prefix
+        const base64Audio = base64String.split(",")[1];
 
         if (base64Audio) {
           await processAudio(base64Audio);
@@ -401,6 +429,12 @@ export default function ChatPage() {
 
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
+      }
+
+      // Clean up TTS
+      const tts = ttsServiceRef.current;
+      if (tts && tts.isSpeaking()) {
+        tts.stop();
       }
     };
   }, []);
@@ -812,7 +846,7 @@ export default function ChatPage() {
           title: title,
           date: new Date().toLocaleDateString(),
           messages: updatedMessages,
-          user_id: userId,
+          user_id: String(user?.id || 0), // Ensure user_id is always a string
         };
 
         const savedChat = await chatStore.saveChat(newChat);
@@ -827,7 +861,7 @@ export default function ChatPage() {
       }
 
       // Refresh chat history
-      const history = await chatStore.getChatHistory(userId);
+      const history = user ? await chatStore.getChatHistory(user.id) : [];
       setChatHistory(history);
       setGeneratingText(false);
     } catch (error) {
@@ -884,6 +918,42 @@ export default function ChatPage() {
     });
   };
 
+  const handleSpeakText = (text: string, messageIndex: number) => {
+    const tts = ttsServiceRef.current;
+    if (!tts) {
+      console.warn("Text-to-speech not available");
+      return;
+    }
+
+    // If already speaking this message, stop it
+    if (speakingMessageIndex === messageIndex && tts.isSpeaking()) {
+      tts.stop();
+      setSpeakingMessageIndex(null);
+      return;
+    }
+
+    // Stop any other speech
+    if (tts.isSpeaking()) {
+      tts.stop();
+    }
+
+    // Prepare text for speech (remove markdown)
+    const cleanText = tts.prepareTextForSpeech(text);
+
+    // Start speaking
+    setSpeakingMessageIndex(messageIndex);
+    tts.speak(cleanText, {
+      voice: selectedVoice ?? undefined, // Ensure type is SpeechSynthesisVoice | undefined
+      onEnd: () => {
+        setSpeakingMessageIndex(null);
+      },
+      onError: (error) => {
+        console.error("TTS error:", error);
+        setSpeakingMessageIndex(null);
+      },
+    });
+  };
+
   const handleLoadChat = async (chatId: number) => {
     // Get the specific chat from history
     const chat = chatHistory.find((c) => c.id === chatId);
@@ -921,7 +991,7 @@ export default function ChatPage() {
   const handleDeleteChat = async (chatId: number, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent triggering the chat selection
     await chatStore.deleteChat(chatId);
-    const updatedHistory = await chatStore.getChatHistory(userId);
+    const updatedHistory = user ? await chatStore.getChatHistory(user.id) : [];
     setChatHistory(updatedHistory);
 
     if (currentChatId === chatId) {
@@ -942,7 +1012,7 @@ export default function ChatPage() {
   ) => {
     e.stopPropagation(); // Prevent triggering the chat selection
     await chatStore.pinChat(chatId, currentPinned);
-    const updatedHistory = await chatStore.getChatHistory(userId);
+    const updatedHistory = user ? await chatStore.getChatHistory(user.id) : [];
     setChatHistory(updatedHistory);
   };
 
@@ -1334,6 +1404,10 @@ export default function ChatPage() {
                         transition={{ duration: 0.4 }}
                         className={`mb-6 ${
                           message.role === "user" ? "ml-auto" : "ml-0"
+                        } ${
+                          speakingMessageIndex === index
+                            ? "speaking-indicator"
+                            : ""
                         }`}
                         style={{ maxWidth: "95%" }}
                       >
@@ -1605,6 +1679,25 @@ export default function ChatPage() {
                                       <>
                                         <Clipboard className="w-3 h-3 mr-1" />
                                         Copy
+                                      </>
+                                    )}
+                                  </button>
+
+                                  <button
+                                    className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-2 py-1 rounded-full transition-colors flex items-center bg-white/80"
+                                    onClick={() =>
+                                      handleSpeakText(message.content, index)
+                                    }
+                                  >
+                                    {speakingMessageIndex === index ? (
+                                      <>
+                                        <VolumeX className="w-3 h-3 mr-1" />
+                                        Stop
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Volume2 className="w-3 h-3 mr-1" />
+                                        Listen
                                       </>
                                     )}
                                   </button>
@@ -2003,6 +2096,14 @@ export default function ChatPage() {
                   <span className="ml-2">TO SEND</span>
                 </span>
               </div>
+
+              {/* ADD THIS NEW SECTION - Voice Selector */}
+              <div className="flex items-center">
+                <VoiceSelector
+                  selectedVoice={selectedVoice}
+                  onVoiceSelect={setSelectedVoice}
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -2283,6 +2384,79 @@ export default function ChatPage() {
 
         .privacy-blur:hover {
           filter: blur(3px);
+        }
+
+        /* The beautiful gradient speaking animation */
+        .speaking-indicator {
+          position: relative;
+          transition: all 0.3s ease;
+        }
+
+        .speaking-indicator::before {
+          content: "";
+          position: absolute;
+          left: -12px;
+          top: -10%;
+          bottom: -10%;
+          width: 4px;
+          background: linear-gradient(
+            to bottom,
+            transparent 0%,
+            rgba(99, 102, 241, 0) 10%,
+            rgba(99, 102, 241, 0.4) 25%,
+            rgba(139, 92, 246, 0.6) 40%,
+            rgba(139, 92, 246, 0.4) 75%,
+            rgba(99, 102, 241, 0) 90%,
+            transparent 100%
+          );
+          border-radius: 2px;
+          animation: gentleSlide 3s ease-in-out infinite;
+          filter: blur(0.5px);
+        }
+
+        /* Add a subtle glow effect */
+        .speaking-indicator::after {
+          content: "";
+          position: absolute;
+          left: -14px;
+          top: -10%;
+          bottom: -10%;
+          width: 8px;
+          background: linear-gradient(
+            to bottom,
+            transparent 0%,
+            rgba(99, 102, 241, 0) 10%,
+            rgba(99, 102, 241, 0.1) 25%,
+            rgba(139, 92, 246, 0.15) 40%,
+            rgba(236, 72, 153, 0.15) 60%,
+            rgba(139, 92, 246, 0.1) 75%,
+            rgba(99, 102, 241, 0) 90%,
+            transparent 100%
+          );
+          border-radius: 4px;
+          animation: gentleSlide 3s ease-in-out infinite;
+          filter: blur(3px);
+        }
+
+        @keyframes gentleSlide {
+          0% {
+            transform: translateY(-100%);
+            opacity: 0;
+          }
+          15% {
+            opacity: 0.8;
+          }
+          50% {
+            transform: translateY(0);
+            opacity: 1;
+          }
+          85% {
+            opacity: 0.8;
+          }
+          100% {
+            transform: translateY(100%);
+            opacity: 0;
+          }
         }
       `}</style>
     </main>
