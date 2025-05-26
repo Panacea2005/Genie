@@ -39,7 +39,7 @@ export default function WaitlistPage() {
   }, [])
 
   return (
-    <main className="h-screen overflow-hidden flex flex-col bg-white">
+    <main className="h-screen flex flex-col bg-white">
       {/* Background subtle gradient */}
       <div className="fixed inset-0 bg-gradient-to-br from-white via-gray-50 to-gray-100 -z-10" />
       
@@ -47,7 +47,7 @@ export default function WaitlistPage() {
       <Navbar currentPage="waitlist" />
 
       {/* Main content with centered sphere and elements on it */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4">
+      <div className="flex-1 flex flex-col items-center justify-center px-4 min-h-0">
         <div className="flex flex-col items-center max-w-xl w-full">
           {/* Main content with animations */}
           <motion.div 
@@ -92,7 +92,7 @@ export default function WaitlistPage() {
             
             {/* Main text with large Genie logo using the same font as home page */}
             <motion.h1 
-              className="text-7xl font-light mb-4 text-gray-800 z-10 logo-text"
+              className="text-6xl md:text-7xl font-light mb-6 text-gray-800 z-10 logo-text"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4 }}
@@ -101,21 +101,22 @@ export default function WaitlistPage() {
             </motion.h1>
             
             {/* Sphere container with absolute positioned text and email input */}
-            <div className="relative flex flex-col items-center justify-center w-full mb-6 pt-6">
-              {/* 3D Gradient Sphere with pulse on submission */}
+            <div className="relative flex flex-col items-center justify-center w-full mb-4">
+              {/* 3D Gradient Sphere with pulse on submission - made smaller */}
               <motion.div
+                className="scale-75 md:scale-90"
                 animate={spherePulse ? {
-                  scale: [1, 1.03, 1],
+                  scale: [0.75, 0.78, 0.75],
                   transition: { duration: 1.2, ease: "easeInOut" }
                 } : {}}
               >
                 <GradientSphere />
               </motion.div>
               
-              <div className="absolute flex flex-col items-center max-w-lg w-full z-20" style={{ top: "50%" }}>
+              <div className="absolute flex flex-col items-center max-w-md w-full z-20" style={{ top: "45%" }}>
                 {/* Text above email input with refined typography */}
                 <motion.p
-                  className="text-center text-gray-600 mb-8 font-light text-sm md:text-base leading-relaxed"
+                  className="text-center text-gray-600 mb-6 font-light text-sm leading-relaxed px-4"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.6 }}
@@ -126,7 +127,7 @@ export default function WaitlistPage() {
                 
                 {/* Refined email input positioned on the sphere */}
                 <motion.form 
-                  className="flex w-full gap-3 px-6 md:px-10"
+                  className="flex w-full gap-3 px-4"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.7 }}
@@ -135,7 +136,7 @@ export default function WaitlistPage() {
                   <input
                     type="email"
                     placeholder="Enter your email"
-                    className={`flex-1 h-12 px-6 rounded-full border ${isFocused ? 'border-gray-300' : 'border-gray-200'} 
+                    className={`flex-1 h-11 px-5 rounded-full border ${isFocused ? 'border-gray-300' : 'border-gray-200'} 
                       bg-white/90 backdrop-blur-sm shadow-sm focus:outline-none focus:ring-0 
                       focus:border-gray-300 text-sm text-gray-600 font-light transition-all duration-300`}
                     value={email}
@@ -146,7 +147,7 @@ export default function WaitlistPage() {
                   />
                   <motion.button
                     type="submit"
-                    className="h-12 w-12 rounded-full bg-black text-white flex items-center justify-center shadow-sm"
+                    className="h-11 w-11 rounded-full bg-black text-white flex items-center justify-center shadow-sm"
                     whileHover={{ scale: 1.05, boxShadow: "0 4px 15px rgba(0,0,0,0.1)" }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -157,7 +158,7 @@ export default function WaitlistPage() {
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
                           exit={{ scale: 0 }}
-                          className="w-5 h-5" 
+                          className="w-4 h-4" 
                           fill="none" 
                           viewBox="0 0 24 24" 
                           stroke="currentColor"
@@ -170,8 +171,8 @@ export default function WaitlistPage() {
                           initial={{ scale: 0 }}
                           animate={{ scale: 1 }}
                           exit={{ scale: 0 }}
-                          width="18" 
-                          height="18" 
+                          width="16" 
+                          height="16" 
                           viewBox="0 0 24 24" 
                           fill="none" 
                           xmlns="http://www.w3.org/2000/svg"
@@ -187,7 +188,7 @@ export default function WaitlistPage() {
                 <AnimatePresence>
                   {isSubmitted && (
                     <motion.div
-                      className="absolute top-full mt-6 text-center"
+                      className="absolute top-full mt-4 text-center"
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
@@ -205,7 +206,7 @@ export default function WaitlistPage() {
         </div>
       </div>
 
-      {/* Refined footer with minimal design */}
+      {/* Footer - Now visible at bottom */}
       <Footer />
     </main>
   )

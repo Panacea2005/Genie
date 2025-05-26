@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/app/contexts/AuthContext"; // ADD THIS IMPORT
+import { useAuth } from "@/app/contexts/AuthContext";
 import {
   Send,
   Clipboard,
@@ -21,17 +21,10 @@ import {
   ChevronRight,
   Paperclip,
   X,
-  Heart,
-  LifeBuoy,
-  BookOpen,
-  BarChart2,
-  Shield,
   EyeOff,
-  AlertTriangle,
   Mic,
   MicOff,
   ChevronUp,
-  SmilePlus,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -44,28 +37,11 @@ import {
   chatStore,
   Message as BaseMessage,
   ChatHistory,
-  MentalHealthContext,
 } from "@/lib/services/chatStore";
 
-// Mental health specific imports
-import EmotionSelector from "@/components/chat/emotion-selector";
-import WellnessExercise from "@/components/chat/wellness-exercise";
-import MentalHealthResources from "@/components/chat/mental-health-resources";
-import MoodTracker from "@/components/chat/mood-tracker";
-import SafetyPlan from "@/components/chat/safety-plan";
-import CopingSkillsLibrary from "@/components/chat/coping-skills-library";
-import CrisisAlert from "@/components/chat/crisis-alert";
+// Chat specific imports
 import ModelSelector from "@/components/chat/model-selector";
 import VoiceSelector from "@/components/chat/voice-selector";
-import {
-  mentalHealthTechniques,
-  getTechniqueById,
-} from "@/lib/services/mentalHealthResources";
-import {
-  analyzeMessage,
-  needsMentalHealthReferral,
-  detectTriggeringContent,
-} from "@/lib/services/mentalHealthUtils";
 import Groq from "groq-sdk";
 import { getTTSService } from "@/lib/services/ttsService";
 
@@ -74,10 +50,7 @@ const Navbar = dynamic(() => import("@/components/navbar"), {
   ssr: false,
 });
 
-// Import Footer component
-const Footer = dynamic(() => import("@/components/footer"), {
-  ssr: false,
-});
+// Removed Footer component import
 
 // Import the GradientSphere component
 const GradientSphere = dynamic(() => import("@/components/gradient-sphere"), {
@@ -90,11 +63,10 @@ type Message = BaseMessage & {
 };
 
 export default function ChatPage() {
-  // CHANGE: Get the authenticated user from AuthContext
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  // CHANGE: Redirect to auth if not logged in
+  // Redirect to auth if not logged in
   useEffect(() => {
     if (!loading && !user) {
       router.push("/auth");
@@ -115,7 +87,7 @@ export default function ChatPage() {
     null
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [toolsBarExpanded, setToolsBarExpanded] = useState(true);
+  const [toolsBarExpanded, setToolsBarExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const [speakingMessageIndex, setSpeakingMessageIndex] = useState<
     number | null
@@ -134,24 +106,9 @@ export default function ChatPage() {
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Mental health related state
-  const [showEmotionSelector, setShowEmotionSelector] = useState(false);
-  const [selectedEmotion, setSelectedEmotion] = useState<any>(null);
-  const [showWellnessExercise, setShowWellnessExercise] = useState(false);
-  const [selectedExercise, setSelectedExercise] = useState<string | null>(null);
-  const [showResources, setShowResources] = useState(false);
-  const [showMoodTracker, setShowMoodTracker] = useState(false);
-  const [showCopingSkills, setShowCopingSkills] = useState(false);
-  const [showSafetyPlan, setShowSafetyPlan] = useState(false);
-  const [showDisclaimer, setShowDisclaimer] = useState(true);
-  const [moodData, setMoodData] = useState<any[]>([]);
-  const [crisisDetected, setCrisisDetected] = useState(false);
-  const [showCrisisAlert, setShowCrisisAlert] = useState(false);
-  const [anxietyDetected, setAnxietyDetected] = useState(false);
+  // Chat state
   const [showPrivacyMode, setShowPrivacyMode] = useState(false);
   const [selectedModel, setSelectedModel] = useState("llama3-70b-8192");
-  const [currentMentalHealthContext, setCurrentMentalHealthContext] =
-    useState<MentalHealthContext | null>(null);
 
   // Refs
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -159,13 +116,13 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const ttsServiceRef = useRef(getTTSService());
 
-  // CHANGE: Load initial data - only when user is available
+  // Load initial data - only when user is available
   useEffect(() => {
     if (!user) return;
 
     setMounted(true);
 
-    // ADD THIS NEW CODE - Load saved voice preference
+    // Load saved voice preference
     const savedVoiceName = localStorage.getItem("preferredVoice");
     if (savedVoiceName && "speechSynthesis" in window) {
       const loadSavedVoice = () => {
@@ -182,13 +139,12 @@ export default function ChatPage() {
       // Also listen for voices changed event
       window.speechSynthesis.onvoiceschanged = loadSavedVoice;
     }
-    // END OF NEW CODE
 
     // Load chat history from Supabase on component mount
     const loadChatHistory = async () => {
       try {
         setIsLoadingChats(true);
-        const history = await chatStore.getChatHistory(user.id); // CHANGE: Use user.id
+        const history = await chatStore.getChatHistory(user.id);
         setChatHistory(history);
       } catch (error) {
         console.error("Error loading chat history:", error);
@@ -198,7 +154,7 @@ export default function ChatPage() {
     };
 
     loadChatHistory();
-  }, [user]); // CHANGE: Depend on user
+  }, [user]);
 
   // Scroll to bottom when messages change
   useEffect(() => {
@@ -208,7 +164,7 @@ export default function ChatPage() {
     }
   }, [messages, allMessages]);
 
-  // CHANGE: Second useEffect for tools bar - also check for user
+  // Second useEffect for tools bar - also check for user
   useEffect(() => {
     if (!user) return;
 
@@ -224,7 +180,7 @@ export default function ChatPage() {
     const loadChatHistory = async () => {
       try {
         setIsLoadingChats(true);
-        const history = await chatStore.getChatHistory(user.id); // CHANGE: Use user.id
+        const history = await chatStore.getChatHistory(user.id);
         setChatHistory(history);
       } catch (error) {
         console.error("Error loading chat history:", error);
@@ -234,7 +190,7 @@ export default function ChatPage() {
     };
 
     loadChatHistory();
-  }, [user]); // CHANGE: Depend on user
+  }, [user]);
 
   // Handler for tools bar toggle
   const handleToolsBarToggle = (
@@ -413,7 +369,7 @@ export default function ChatPage() {
     }
   };
 
-  // 4. Add a cleanup function to ensure resources are released
+  // Cleanup function to ensure resources are released
   useEffect(() => {
     return () => {
       // Clean up on component unmount
@@ -439,7 +395,7 @@ export default function ChatPage() {
     };
   }, []);
 
-  // 5. Add this function to format the recording time
+  // Function to format the recording time
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -448,240 +404,12 @@ export default function ChatPage() {
       .padStart(2, "0")}`;
   };
 
-  // Load mental health context when current chat changes
-  useEffect(() => {
-    const loadMentalHealthContext = async () => {
-      if (currentChatId !== null) {
-        const chat = await chatStore.getChatById(currentChatId);
-        if (chat && chat.mentalHealthContext) {
-          setCurrentMentalHealthContext(chat.mentalHealthContext);
-        } else {
-          setCurrentMentalHealthContext(null);
-        }
-      } else {
-        setCurrentMentalHealthContext(null);
-      }
-    };
-
-    loadMentalHealthContext();
-  }, [currentChatId]);
-
-  // Load mood data for mood tracker
-  useEffect(() => {
-    const loadMoodData = async () => {
-      if (currentChatId !== null) {
-        const chat = await chatStore.getChatById(currentChatId);
-        if (
-          chat &&
-          chat.mentalHealthContext &&
-          chat.mentalHealthContext.reportedMoods
-        ) {
-          // Convert to the format needed by MoodTracker
-          const moods = chat.mentalHealthContext.reportedMoods;
-
-          // Group by date
-          const groupedMoods: { [key: string]: any[] } = {};
-          moods.forEach((mood) => {
-            const date = new Date(mood.timestamp || new Date());
-            const dateString = date.toISOString().split("T")[0];
-
-            if (!groupedMoods[dateString]) {
-              groupedMoods[dateString] = [];
-            }
-
-            groupedMoods[dateString].push(mood);
-          });
-
-          // Convert to array format
-          const moodDataArray = Object.entries(groupedMoods).map(
-            ([date, moods]) => ({
-              date,
-              moods,
-            })
-          );
-
-          setMoodData(moodDataArray);
-        }
-      }
-    };
-
-    loadMoodData();
-  }, [currentChatId, currentMentalHealthContext]);
-
-  // Automatically suggest wellness exercises for anxiety
-  useEffect(() => {
-    if (anxietyDetected && !crisisDetected && messages.length > 0) {
-      // Wait a bit before suggesting an exercise
-      const timer = setTimeout(() => {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage.role === "assistant") {
-          const systemMessage: Message = {
-            role: "assistant",
-            content:
-              "I notice you might be feeling anxious. Would you like to try a quick breathing exercise to help you feel calmer?",
-            timestamp: new Date(),
-          };
-
-          setMessages((prev) => [...prev, systemMessage]);
-          setAllMessages((prev) => [...prev, systemMessage]);
-
-          if (currentChatId !== null) {
-            chatStore.updateChat(currentChatId, {
-              messages: [...allMessages, systemMessage],
-            });
-          }
-
-          // Find a breathing exercise
-          const breathingExercise = mentalHealthTechniques.find(
-            (t) => t.category === "breathing"
-          );
-          if (breathingExercise) {
-            setSelectedExercise(breathingExercise.id);
-          }
-        }
-      }, 5000);
-
-      return () => clearTimeout(timer);
-    }
-  }, [anxietyDetected, crisisDetected, messages]);
-
-  // Crisis detection function
-  const detectCrisis = (message: string): boolean => {
-    const crisisKeywords = [
-      "suicide",
-      "kill myself",
-      "end my life",
-      "don't want to live",
-      "self-harm",
-      "hurt myself",
-      "cutting myself",
-      "death",
-      "dying",
-      "overdose",
-      "can't go on",
-      "hopeless",
-      "helpless",
-      "unbearable",
-    ];
-
-    const lowerMessage = message.toLowerCase();
-    return crisisKeywords.some((keyword) => lowerMessage.includes(keyword));
-  };
-
-  // Anxiety detection function
-  const detectAnxiety = (message: string): boolean => {
-    const anxietyKeywords = [
-      "anxiety",
-      "anxious",
-      "panic",
-      "worried",
-      "fear",
-      "stress",
-      "overwhelm",
-      "nervous",
-    ];
-    const lowerMessage = message.toLowerCase();
-    return anxietyKeywords.some((keyword) => lowerMessage.includes(keyword));
-  };
-
-  // Handler for emotion selection
-  const handleEmotionSelect = (emotion: any, intensity?: number) => {
-    setSelectedEmotion({
-      ...emotion,
-      intensity: intensity || 5,
-      timestamp: new Date(),
-    });
-
-    // Automatically add to the chat input
-    setInput(
-      (current) =>
-        current +
-        (current ? "\n\n" : "") +
-        `I'm feeling ${emotion.name.toLowerCase()}${
-          intensity ? ` (${intensity}/10)` : ""
-        }.`
-    );
-
-    setShowEmotionSelector(false);
-  };
-
-  // Handler for exercise completion
-  const handleExerciseComplete = async () => {
-    if (currentChatId !== null && selectedExercise) {
-      const technique = getTechniqueById(selectedExercise);
-      if (technique) {
-        await chatStore.addRecommendedTechnique(currentChatId, technique.id);
-
-        // Add a message to the chat
-        const systemMessage: Message = {
-          role: "assistant",
-          content: `I notice you've completed the "${technique.name}" exercise. Great job! How do you feel now?`,
-          timestamp: new Date(),
-        };
-
-        setMessages((prev) => [...prev, systemMessage]);
-        setAllMessages((prev) => [...prev, systemMessage]);
-
-        if (currentChatId !== null) {
-          await chatStore.updateChat(currentChatId, {
-            messages: [...allMessages, systemMessage],
-          });
-        }
-      }
-
-      setShowWellnessExercise(false);
-      setSelectedExercise(null);
-    }
-  };
-
-  // Handler for safety plan updates
-  const handleSafetyPlanUpdate = async (
-    safetyPlan: MentalHealthContext["safetyPlan"]
-  ) => {
-    if (currentChatId !== null) {
-      await chatStore.updateMentalHealthContext(currentChatId, { safetyPlan });
-
-      // Update local state
-      if (currentMentalHealthContext) {
-        setCurrentMentalHealthContext({
-          ...currentMentalHealthContext,
-          safetyPlan,
-        });
-      }
-    }
-  };
-
-  // Handler for crisis help requests
-  const handleCrisisHelp = (helpType: string) => {
-    setShowCrisisAlert(false);
-
-    if (helpType === "safetyPlan") {
-      setShowSafetyPlan(true);
-    } else if (helpType === "resources") {
-      setShowResources(true);
-    }
-    // Chat continues normally for 'chat' option
-  };
-
   // Event handlers
   const handleSend = async () => {
     if ((!input.trim() && !uploadedFile) || isLoading) return;
 
     try {
       setIsLoading(true);
-
-      // Check for crisis or anxiety signals
-      const isCrisis = detectCrisis(input);
-      const hasAnxiety = detectAnxiety(input);
-
-      if (isCrisis && !crisisDetected) {
-        setCrisisDetected(true);
-        setShowCrisisAlert(true);
-      }
-
-      if (hasAnxiety && !anxietyDetected) {
-        setAnxietyDetected(true);
-      }
 
       const userMessage: Message = {
         role: "user",
@@ -790,46 +518,6 @@ export default function ChatPage() {
         speed: "2.3x FASTER",
         tokens: Math.floor(response.length / 4),
       };
-
-      // Update mental health context if emotion was selected
-      if (currentChatId !== null) {
-        if (selectedEmotion) {
-          await chatStore.addMoodEntry(
-            currentChatId,
-            selectedEmotion.name,
-            selectedEmotion.intensity || 5,
-            selectedEmotion.notes
-          );
-
-          // Reset selected emotion
-          setSelectedEmotion(null);
-        }
-
-        // Update context with detected crisis/anxiety
-        if (isCrisis || hasAnxiety) {
-          const chat = await chatStore.getChatById(currentChatId);
-          if (chat && chat.mentalHealthContext) {
-            const updatedSymptoms = [
-              ...chat.mentalHealthContext.mentionedSymptoms,
-            ];
-
-            if (isCrisis && !updatedSymptoms.includes("crisis")) {
-              updatedSymptoms.push("crisis");
-            }
-
-            if (hasAnxiety && !updatedSymptoms.includes("anxiety")) {
-              updatedSymptoms.push("anxiety");
-            }
-
-            await chatStore.updateMentalHealthContext(currentChatId, {
-              mentionedSymptoms: updatedSymptoms,
-              lastCrisisCheck: isCrisis
-                ? new Date()
-                : chat.mentalHealthContext.lastCrisisCheck,
-            });
-          }
-        }
-      }
 
       // Use allMessages for storage since it has all user and AI messages
       const updatedMessages: Message[] = [
@@ -943,7 +631,7 @@ export default function ChatPage() {
     // Start speaking
     setSpeakingMessageIndex(messageIndex);
     tts.speak(cleanText, {
-      voice: selectedVoice ?? undefined, // Ensure type is SpeechSynthesisVoice | undefined
+      voice: selectedVoice ?? undefined,
       onEnd: () => {
         setSpeakingMessageIndex(null);
       },
@@ -968,20 +656,6 @@ export default function ChatPage() {
       setCurrentChatId(chat.id);
       setShowInitialMessage(false);
 
-      // Reset crisis detection state for new chat
-      setCrisisDetected(false);
-      setAnxietyDetected(false);
-
-      // Check if this chat has crisis or anxiety indicators
-      if (chat.mentalHealthContext) {
-        if (chat.mentalHealthContext.mentionedSymptoms.includes("crisis")) {
-          setCrisisDetected(true);
-        }
-        if (chat.mentalHealthContext.mentionedSymptoms.includes("anxiety")) {
-          setAnxietyDetected(true);
-        }
-      }
-
       if (window.innerWidth < 768) {
         setSidebarOpen(false); // Close sidebar on mobile after selection
       }
@@ -999,9 +673,6 @@ export default function ChatPage() {
       setAllMessages([]);
       setShowInitialMessage(true);
       setCurrentChatId(null);
-      setCrisisDetected(false);
-      setAnxietyDetected(false);
-      setCurrentMentalHealthContext(null);
     }
   };
 
@@ -1021,9 +692,6 @@ export default function ChatPage() {
     setAllMessages([]);
     setShowInitialMessage(true);
     setCurrentChatId(null);
-    setCrisisDetected(false);
-    setAnxietyDetected(false);
-    setCurrentMentalHealthContext(null);
     if (window.innerWidth < 768) {
       setSidebarOpen(false); // Close sidebar on mobile
     }
@@ -1117,16 +785,7 @@ export default function ChatPage() {
                     }`}
                     onClick={() => handleLoadChat(chat.id)}
                   >
-                    {/* Indicate mental health chats with appropriate icons */}
-                    {chat.mentalHealthContext?.mentionedSymptoms?.includes(
-                      "crisis"
-                    ) ? (
-                      <AlertTriangle className="w-3 h-3 text-red-500" />
-                    ) : chat.mentalHealthContext?.mentionedSymptoms?.includes(
-                        "anxiety"
-                      ) ? (
-                      <Heart className="w-3 h-3 text-purple-500" />
-                    ) : chat.pinned ? (
+                    {chat.pinned ? (
                       <Pin className="w-3 h-3 text-indigo-500" />
                     ) : (
                       <Clock className="w-3 h-3 text-gray-400" />
@@ -1219,68 +878,44 @@ export default function ChatPage() {
         </div>
 
         {/* Welcome Visualization State (before first message) */}
-        {showInitialMessage &&
-          !showEmotionSelector &&
-          !showWellnessExercise &&
-          !showResources &&
-          !showMoodTracker &&
-          !showCopingSkills &&
-          !showSafetyPlan && (
-            <div
-              className="fixed inset-0 flex flex-col items-center justify-center z-10"
-              style={{
-                // This adjusts the positioning when sidebar is open/closed
-                left: sidebarOpen ? "256px" : 0,
-                width: sidebarOpen ? "calc(100% - 256px)" : "100%",
-                top: "64px", // Account for navbar height
-                height: "calc(100% - 64px)",
-              }}
-            >
-              {/* Gradient Sphere with Simple, Elegant Text Overlay */}
-              <div className="relative w-full max-w-xl mx-auto">
-                {/* The Gradient Sphere */}
-                <div className="w-full" style={{ maxHeight: "70vh" }}>
-                  <GradientSphere />
-                </div>
+        {showInitialMessage && (
+          <div
+            className="fixed inset-0 flex flex-col items-center justify-center z-10"
+            style={{
+              // This adjusts the positioning when sidebar is open/closed
+              left: sidebarOpen ? "256px" : 0,
+              width: sidebarOpen ? "calc(100% - 256px)" : "100%",
+              top: "64px", // Account for navbar height
+              height: "calc(100% - 64px)",
+            }}
+          >
+            {/* Gradient Sphere with Simple, Elegant Text Overlay */}
+            <div className="relative w-full max-w-xl mx-auto">
+              {/* The Gradient Sphere */}
+              <div className="w-full" style={{ maxHeight: "70vh" }}>
+                <GradientSphere />
+              </div>
 
-                {/* Single elegant text positioned on top of the sphere */}
-                <div className="absolute inset-0 flex items-center justify-center z-10">
-                  <h2
-                    className="text-3xl md:text-4xl lg:text-5xl font-light text-center text-gray-800"
-                    style={{
-                      position: "relative",
-                      zIndex: 20,
-                      textShadow: "0 2px 10px rgba(255,255,255,0.7)",
-                    }}
-                  >
-                    Hi, I'm Genie.
-                  </h2>
-                </div>
+              {/* Single elegant text positioned on top of the sphere */}
+              <div className="absolute inset-0 flex items-center justify-center z-10">
+                <h2
+                  className="text-3xl md:text-4xl lg:text-5xl font-light text-center text-gray-800"
+                  style={{
+                    position: "relative",
+                    zIndex: 20,
+                    textShadow: "0 2px 10px rgba(255,255,255,0.7)",
+                  }}
+                >
+                  Hi, I'm Genie.
+                </h2>
               </div>
             </div>
-          )}
-        {/* Crisis Alert Dialog - Show when crisis is detected */}
-        {showCrisisAlert && (
-          <CrisisAlert
-            onClose={() => setShowCrisisAlert(false)}
-            onRequestHelp={handleCrisisHelp}
-            userLocation="United States" // You can customize this based on user location
-          />
+          </div>
         )}
+
         {/* Chat Interface (after first message or always visible but transparent initially) */}
         <AnimatePresence>
-          {/* Show chat UI when any of these conditions are met:
-      1. Initial message is hidden
-      2. There are messages
-      3. Any mental health component is showing */}
-          {(!showInitialMessage ||
-            messages.length > 0 ||
-            showEmotionSelector ||
-            showWellnessExercise ||
-            showResources ||
-            showMoodTracker ||
-            showCopingSkills ||
-            showSafetyPlan) && (
+          {(!showInitialMessage || messages.length > 0) && (
             <motion.div
               className={`absolute inset-0 flex flex-col pt-16 ${
                 sidebarOpen ? "md:pl-64" : "md:pl-0"
@@ -1296,106 +931,6 @@ export default function ChatPage() {
               >
                 <div className="max-w-3xl mx-auto">
                   <AnimatePresence>
-                    {/* Emotion Selector */}
-                    {showEmotionSelector && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="mb-4"
-                      >
-                        <EmotionSelector onSelect={handleEmotionSelect} />
-                      </motion.div>
-                    )}
-
-                    {/* Wellness Exercise */}
-                    {showWellnessExercise && selectedExercise && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="mb-4"
-                      >
-                        <WellnessExercise
-                          techniqueId={selectedExercise}
-                          onComplete={handleExerciseComplete}
-                        />
-                      </motion.div>
-                    )}
-
-                    {/* Mental Health Resources */}
-                    {showResources && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="mb-4"
-                      >
-                        <MentalHealthResources
-                          category={crisisDetected ? "crisis" : undefined}
-                          onClose={() => setShowResources(false)}
-                        />
-                      </motion.div>
-                    )}
-
-                    {/* Mood Tracker */}
-                    {showMoodTracker && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="mb-4"
-                      >
-                        <MoodTracker
-                          moodData={moodData}
-                          onNewEntry={(mood, intensity, notes) => {
-                            if (currentChatId !== null) {
-                              chatStore.addMoodEntry(
-                                currentChatId,
-                                mood,
-                                intensity,
-                                notes
-                              );
-                            }
-                          }}
-                        />
-                      </motion.div>
-                    )}
-
-                    {/* Coping Skills Library */}
-                    {showCopingSkills && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="mb-4"
-                      >
-                        <CopingSkillsLibrary
-                          onSelectTechnique={(techniqueId) => {
-                            setSelectedExercise(techniqueId);
-                            setShowCopingSkills(false);
-                            setShowWellnessExercise(true);
-                          }}
-                          onClose={() => setShowCopingSkills(false)}
-                        />
-                      </motion.div>
-                    )}
-
-                    {/* Safety Plan */}
-                    {showSafetyPlan && currentMentalHealthContext && (
-                      <motion.div
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: 10 }}
-                        className="mb-4"
-                      >
-                        <SafetyPlan
-                          safetyPlan={currentMentalHealthContext.safetyPlan}
-                          onUpdate={handleSafetyPlanUpdate}
-                        />
-                      </motion.div>
-                    )}
-
                     {messages.map((message, index) => (
                       <motion.div
                         key={index}
@@ -1733,6 +1268,7 @@ export default function ChatPage() {
             </motion.div>
           )}
         </AnimatePresence>
+
         {/* Input Area - Always at bottom */}
         <div
           className={`fixed bottom-0 left-0 right-0 z-20 border-t border-gray-200 bg-white/80 backdrop-blur-sm ${
@@ -1740,215 +1276,23 @@ export default function ChatPage() {
           } transition-all duration-300`}
         >
           <div className="max-w-4xl mx-auto relative">
-            {/* Collapsible Mental Health Tools Bar */}
+            {/* Simple Privacy Mode Toggle */}
             <div className="relative">
-              {/* Toggle button - always visible */}
+              {/* Privacy button - always visible */}
               <button
-                onClick={() => handleToolsBarToggle(!toolsBarExpanded)}
-                className="absolute -top-3 left-1/2 transform -translate-x-1/2 w-6 h-6 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center z-10 hover:bg-gray-50 transition-colors"
-                aria-label={
-                  toolsBarExpanded ? "Collapse tools" : "Expand tools"
-                }
+                onClick={() => setShowPrivacyMode(!showPrivacyMode)}
+                className={`absolute -top-3 left-1/2 transform -translate-x-1/2 w-8 h-8 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center z-10 hover:bg-gray-50 transition-colors ${
+                  showPrivacyMode
+                    ? "bg-indigo-50 text-indigo-600"
+                    : "text-gray-400 hover:text-gray-600"
+                }`}
+                aria-label={showPrivacyMode ? "Disable privacy mode" : "Enable privacy mode"}
+                title={showPrivacyMode ? "Privacy mode is on" : "Enable privacy mode"}
               >
-                <motion.div
-                  animate={{ rotate: toolsBarExpanded ? 0 : 180 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <ChevronUp className="w-3 h-3 text-gray-400" />
-                </motion.div>
+                <EyeOff className="w-4 h-4" />
               </button>
-
-              {/* Tools container */}
-              <AnimatePresence>
-                {toolsBarExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="px-6 py-3 border-b border-gray-50 flex items-center justify-center gap-4 overflow-x-auto"
-                  >
-                    {/* Emotion Button - Minimized */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowEmotionSelector((prev) => !prev);
-                        setShowInitialMessage(false);
-                      }}
-                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        showEmotionSelector
-                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                      }`}
-                      title="How are you feeling?"
-                    >
-                      <SmilePlus className="w-4 h-4" />
-
-                      {/* Hover tooltip */}
-                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        Emotions
-                      </span>
-                    </button>
-
-                    {/* Resources Button - Minimized */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowResources((prev) => !prev);
-                        setShowInitialMessage(false);
-                      }}
-                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        showResources
-                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                      }`}
-                      title="Mental Health Resources"
-                    >
-                      <LifeBuoy className="w-4 h-4" />
-
-                      {/* Hover tooltip */}
-                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        Resources
-                      </span>
-                    </button>
-
-                    {/* Wellness Exercise Button - Minimized */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // Pick a random technique if none selected
-                        if (!selectedExercise) {
-                          const randomIndex = Math.floor(
-                            Math.random() * mentalHealthTechniques.length
-                          );
-                          setSelectedExercise(
-                            mentalHealthTechniques[randomIndex].id
-                          );
-                        }
-                        setShowWellnessExercise((prev) => !prev);
-                        setShowInitialMessage(false);
-                      }}
-                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        showWellnessExercise
-                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                      }`}
-                      title="Wellness Exercises"
-                    >
-                      <Heart className="w-4 h-4" />
-
-                      {/* Hover tooltip */}
-                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        Exercises
-                      </span>
-                    </button>
-
-                    {/* Coping Skills Library Button - Minimized */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowCopingSkills((prev) => !prev);
-                        setShowInitialMessage(false);
-                      }}
-                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        showCopingSkills
-                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                      }`}
-                      title="Coping Skills Library"
-                    >
-                      <BookOpen className="w-4 h-4" />
-
-                      {/* Hover tooltip */}
-                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        Skills
-                      </span>
-                    </button>
-
-                    {/* Mood Tracker Button - Minimized */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMoodTracker((prev) => !prev);
-                        setShowInitialMessage(false);
-                      }}
-                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        showMoodTracker
-                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                      }`}
-                      title="Mood Tracker"
-                    >
-                      <BarChart2 className="w-4 h-4" />
-
-                      {/* Hover tooltip */}
-                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        Tracker
-                      </span>
-                    </button>
-
-                    {/* Safety Plan Button - Minimized */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowSafetyPlan((prev) => !prev);
-                        setShowInitialMessage(false);
-                      }}
-                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        showSafetyPlan
-                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                      }`}
-                      title="Safety Plan"
-                    >
-                      <Shield className="w-4 h-4" />
-
-                      {/* Hover tooltip */}
-                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        Safety
-                      </span>
-                    </button>
-
-                    {/* Privacy Mode Button - Minimized */}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowPrivacyMode((prev) => !prev);
-                        setShowInitialMessage(false);
-                      }}
-                      className={`group relative w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-                        showPrivacyMode
-                          ? "bg-indigo-50 text-indigo-600 shadow-sm"
-                          : "text-gray-400 hover:text-gray-600 hover:bg-gray-50"
-                      }`}
-                      title="Privacy Mode"
-                    >
-                      <EyeOff className="w-4 h-4" />
-
-                      {/* Hover tooltip */}
-                      <span className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                        Privacy
-                      </span>
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Collapsed state indicator - only show when collapsed */}
-              {!toolsBarExpanded && (
-                <div className="h-1 border-b border-gray-50 flex justify-center">
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="flex space-x-1 items-center -mt-px"
-                  >
-                    <div className="w-1 h-1 rounded-full bg-gray-200"></div>
-                    <div className="w-1 h-1 rounded-full bg-gray-300"></div>
-                    <div className="w-1 h-1 rounded-full bg-gray-200"></div>
-                  </motion.div>
-                </div>
-              )}
             </div>
+
             {/* Uploaded file display */}
             {uploadedFile && (
               <div className="px-6 pt-2 pb-0">
@@ -2097,7 +1441,7 @@ export default function ChatPage() {
                 </span>
               </div>
 
-              {/* ADD THIS NEW SECTION - Voice Selector */}
+              {/* Voice Selector */}
               <div className="flex items-center">
                 <VoiceSelector
                   selectedVoice={selectedVoice}
@@ -2109,8 +1453,7 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Footer component */}
-      <Footer />
+      {/* Removed Footer component */}
 
       <AnimatePresence>
         {isRecording && (
@@ -2456,6 +1799,76 @@ export default function ChatPage() {
           100% {
             transform: translateY(100%);
             opacity: 0;
+          }
+        }
+
+        /* Voice recording animations */
+        .recording-pulse {
+          animation: recordingPulse 1.5s infinite;
+        }
+
+        @keyframes recordingPulse {
+          0% {
+            transform: scale(1);
+          }
+          50% {
+            transform: scale(1.1);
+          }
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        .recording-timer {
+          position: absolute;
+          top: -20px;
+          left: 50%;
+          transform: translateX(-50%);
+          font-size: 10px;
+          background: rgba(239, 68, 68, 0.1);
+          padding: 2px 6px;
+          border-radius: 10px;
+          white-space: nowrap;
+        }
+
+        .voice-processing {
+          display: flex;
+          gap: 2px;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .voice-processing-bar {
+          width: 2px;
+          height: 12px;
+          background-color: currentColor;
+          animation: voiceWave 1s infinite ease-in-out;
+        }
+
+        .voice-processing-bar:nth-child(1) {
+          animation-delay: 0s;
+        }
+
+        .voice-processing-bar:nth-child(2) {
+          animation-delay: 0.1s;
+        }
+
+        .voice-processing-bar:nth-child(3) {
+          animation-delay: 0.2s;
+        }
+
+        .voice-processing-bar:nth-child(4) {
+          animation-delay: 0.3s;
+        }
+
+        @keyframes voiceWave {
+          0%, 100% {
+            transform: scaleY(0.5);
+            opacity: 0.5;
+          }
+          50% {
+            transform: scaleY(1);
+            opacity: 1;
           }
         }
       `}</style>

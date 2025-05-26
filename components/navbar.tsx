@@ -210,6 +210,11 @@ export default function Navbar({ currentPage = "home" }: { currentPage?: string 
           Chat
         </NavButton>
 
+        {/* Dashboard button - third */}
+        <NavButton href="/dashboard" variant="ghost" className="text-xs text-gray-500 font-light">
+          Dashboard
+        </NavButton>
+
         {loading ? (
           // Loading state
           <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
