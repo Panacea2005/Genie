@@ -42,6 +42,8 @@ import {
 // Chat specific imports
 import ModelSelector from "@/components/chat/model-selector";
 import VoiceSelector from "@/components/chat/voice-selector";
+import ModeSelector from "@/components/chat/mode-selector";
+import SpeechMode from "@/components/chat/speech-mode";
 import Groq from "groq-sdk";
 import { getTTSService } from "@/lib/services/ttsService";
 
@@ -109,6 +111,7 @@ export default function ChatPage() {
   // Chat state
   const [showPrivacyMode, setShowPrivacyMode] = useState(false);
   const [selectedModel, setSelectedModel] = useState("llama3-70b-8192");
+  const [chatMode, setChatMode] = useState<"chat" | "speech">("chat");
 
   // Refs
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -877,6 +880,22 @@ export default function ChatPage() {
           />
         </div>
 
+        {/* Mode Selector - Top Right */}
+        <div className="absolute top-0 right-0 z-40 p-4">
+          <ModeSelector selectedMode={chatMode} onModeChange={setChatMode} />
+        </div>
+
+        {/* Speech Mode Overlay */}
+        <AnimatePresence>
+          {chatMode === "speech" && (
+            <SpeechMode
+              selectedModel={selectedModel}
+              selectedVoice={selectedVoice}
+              onClose={() => setChatMode("chat")}
+            />
+          )}
+        </AnimatePresence>
+
         {/* Welcome Visualization State (before first message) */}
         {showInitialMessage && (
           <div
@@ -913,361 +932,389 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Chat Interface (after first message or always visible but transparent initially) */}
-        <AnimatePresence>
-          {(!showInitialMessage || messages.length > 0) && (
-            <motion.div
-              className={`absolute inset-0 flex flex-col pt-16 ${
-                sidebarOpen ? "md:pl-64" : "md:pl-0"
-              } transition-all duration-300`}
-              initial={{ opacity: messages.length > 0 ? 1 : 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.5 }}
-            >
-              {/* Chat Messages Container */}
-              <div
-                ref={chatContainerRef}
-                className="flex-1 overflow-y-auto px-4 py-4 pb-28 scrollbar-none bg-chat-pattern"
-              >
-                <div className="max-w-3xl mx-auto">
-                  <AnimatePresence>
-                    {messages.map((message, index) => (
-                      <motion.div
-                        key={index}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4 }}
-                        className={`mb-6 ${
-                          message.role === "user" ? "ml-auto" : "ml-0"
-                        } ${
-                          speakingMessageIndex === index
-                            ? "speaking-indicator"
-                            : ""
-                        }`}
-                        style={{ maxWidth: "95%" }}
-                      >
-                        {message.role === "user" ? (
-                          /* User message - right aligned with user avatar */
-                          <div className="flex items-start gap-3 justify-end ml-auto">
-                            <div className="bg-indigo-100 p-3 rounded-lg break-words text-gray-800 shadow-sm">
-                              {message.content}
-                            </div>
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden bg-gradient-to-r from-purple-100 to-indigo-100">
-                              <User className="w-4 h-4 text-gray-700" />
-                            </div>
-                          </div>
-                        ) : (
-                          /* Assistant message - left aligned with bot avatar, no message box */
-                          <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden bg-gradient-to-r from-indigo-100 to-purple-100">
-                              <span className="text-lg">✿</span>
-                            </div>
-
-                            {message.content === "..." ? (
-                              /* Elegant minimal loading animation */
-                              <div className="mt-2 elegant-loading">
-                                <div className="dot"></div>
-                                <div className="dot"></div>
-                                <div className="dot"></div>
-                              </div>
-                            ) : generatingText &&
-                              index === messages.length - 1 ? (
-                              /* Enhanced generating animation for the last message when in typing mode */
-                              <div className="flex-1 text-gray-800">
-                                <div className="mb-1 flex items-center text-xs text-indigo-400 font-light">
-                                  <span className="generating-badge">
-                                    <span className="pulse"></span>
-                                    <span className="ml-1">generating...</span>
-                                  </span>
+        {/* Chat Interface - Only visible in chat mode */}
+        {chatMode === "chat" && (
+          <>
+            {/* Chat Interface (after first message or always visible but transparent initially) */}
+            <AnimatePresence>
+              {(!showInitialMessage || messages.length > 0) && (
+                <motion.div
+                  className={`absolute inset-0 flex flex-col pt-16 ${
+                    sidebarOpen ? "md:pl-64" : "md:pl-0"
+                  } transition-all duration-300`}
+                  initial={{ opacity: messages.length > 0 ? 1 : 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  {/* Chat Messages Container */}
+                  <div
+                    ref={chatContainerRef}
+                    className="flex-1 overflow-y-auto px-4 py-4 pb-28 scrollbar-none bg-chat-pattern"
+                  >
+                    <div className="max-w-3xl mx-auto">
+                      <AnimatePresence>
+                        {messages.map((message, index) => (
+                          <motion.div
+                            key={index}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.4 }}
+                            className={`mb-6 ${
+                              message.role === "user" ? "ml-auto" : "ml-0"
+                            } ${
+                              speakingMessageIndex === index
+                                ? "speaking-indicator"
+                                : ""
+                            }`}
+                            style={{ maxWidth: "95%" }}
+                          >
+                            {message.role === "user" ? (
+                              /* User message - right aligned with user avatar */
+                              <div className="flex items-start gap-3 justify-end ml-auto">
+                                <div className="bg-indigo-100 p-3 rounded-lg break-words text-gray-800 shadow-sm">
+                                  {message.content}
                                 </div>
-                                <div
-                                  className={`markdown-content ${
-                                    showPrivacyMode ? "privacy-blur" : ""
-                                  }`}
-                                >
-                                  {showPrivacyMode ? (
-                                    <div
-                                      onClick={() => setShowPrivacyMode(false)}
-                                      className="p-3 cursor-pointer text-center"
-                                    >
-                                      Content hidden for privacy. Click to view.
-                                    </div>
-                                  ) : (
-                                    <ReactMarkdown
-                                      components={{
-                                        h1: ({ node, ...props }) => (
-                                          <h1
-                                            className="text-xl font-bold my-3"
-                                            {...props}
-                                          />
-                                        ),
-                                        h2: ({ node, ...props }) => (
-                                          <h2
-                                            className="text-lg font-bold my-2"
-                                            {...props}
-                                          />
-                                        ),
-                                        h3: ({ node, ...props }) => (
-                                          <h3
-                                            className="text-md font-semibold my-2"
-                                            {...props}
-                                          />
-                                        ),
-                                        p: ({ node, ...props }) => (
-                                          <p className="mb-3" {...props} />
-                                        ),
-                                        ul: ({ node, ...props }) => (
-                                          <ul
-                                            className="list-disc pl-5 mb-3"
-                                            {...props}
-                                          />
-                                        ),
-                                        ol: ({ node, ...props }) => (
-                                          <ol
-                                            className="list-decimal pl-5 mb-3"
-                                            {...props}
-                                          />
-                                        ),
-                                        li: ({ node, ...props }) => (
-                                          <li className="mb-1" {...props} />
-                                        ),
-                                        a: ({ node, ...props }) => (
-                                          <a
-                                            className="text-indigo-600 hover:underline flex items-center"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            {...props}
-                                          >
-                                            {props.children}
-                                            <ExternalLink className="w-3 h-3 ml-1" />
-                                          </a>
-                                        ),
-                                        strong: ({ node, ...props }) => (
-                                          <strong
-                                            className="font-bold"
-                                            {...props}
-                                          />
-                                        ),
-                                        em: ({ node, ...props }) => (
-                                          <em className="italic" {...props} />
-                                        ),
-                                        blockquote: ({ node, ...props }) => (
-                                          <blockquote
-                                            className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
-                                            {...props}
-                                          />
-                                        ),
-                                      }}
-                                    >
-                                      {message.content}
-                                    </ReactMarkdown>
-                                  )}
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden bg-gradient-to-r from-purple-100 to-indigo-100">
+                                  <User className="w-4 h-4 text-gray-700" />
                                 </div>
-                                {/* Blinking cursor at the end */}
-                                <div className="typing-cursor"></div>
                               </div>
                             ) : (
-                              /* Standard AI message - directly on canvas, no box */
-                              <div className="flex-1">
-                                {/* Performance metrics - show token count */}
-                                {message.tokens && (
-                                  <div className="flex items-center text-xs text-gray-400 mb-1">
-                                    <span className="flex items-center opacity-50">
-                                      {message.tokens} tokens
-                                    </span>
-                                  </div>
-                                )}
+                              /* Assistant message - left aligned with bot avatar, no message box */
+                              <div className="flex items-start gap-3">
+                                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden bg-gradient-to-r from-indigo-100 to-purple-100">
+                                  <span className="text-lg">✿</span>
+                                </div>
 
-                                {/* Message content directly on canvas */}
-                                <div
-                                  className={`text-gray-800 overflow-wrap-anywhere markdown-content ${
-                                    showPrivacyMode ? "privacy-blur" : ""
-                                  }`}
-                                >
-                                  {showPrivacyMode ? (
-                                    <div
-                                      onClick={() => setShowPrivacyMode(false)}
-                                      className="p-3 cursor-pointer text-center"
-                                    >
-                                      Content hidden for privacy. Click to view.
+                                {message.content === "..." ? (
+                                  /* Elegant minimal loading animation */
+                                  <div className="mt-2 elegant-loading">
+                                    <div className="dot"></div>
+                                    <div className="dot"></div>
+                                    <div className="dot"></div>
+                                  </div>
+                                ) : generatingText &&
+                                  index === messages.length - 1 ? (
+                                  /* Enhanced generating animation for the last message when in typing mode */
+                                  <div className="flex-1 text-gray-800">
+                                    <div className="mb-1 flex items-center text-xs text-indigo-400 font-light">
+                                      <span className="generating-badge">
+                                        <span className="pulse"></span>
+                                        <span className="ml-1">
+                                          generating...
+                                        </span>
+                                      </span>
                                     </div>
-                                  ) : (
-                                    <ReactMarkdown
-                                      components={{
-                                        h1: ({ node, ...props }) => (
-                                          <h1
-                                            className="text-xl font-bold my-3"
-                                            {...props}
-                                          />
-                                        ),
-                                        h2: ({ node, ...props }) => (
-                                          <h2
-                                            className="text-lg font-bold my-2"
-                                            {...props}
-                                          />
-                                        ),
-                                        h3: ({ node, ...props }) => (
-                                          <h3
-                                            className="text-md font-semibold my-2"
-                                            {...props}
-                                          />
-                                        ),
-                                        p: ({ node, ...props }) => (
-                                          <p className="mb-3" {...props} />
-                                        ),
-                                        ul: ({ node, ...props }) => (
-                                          <ul
-                                            className="list-disc pl-5 mb-3"
-                                            {...props}
-                                          />
-                                        ),
-                                        ol: ({ node, ...props }) => (
-                                          <ol
-                                            className="list-decimal pl-5 mb-3"
-                                            {...props}
-                                          />
-                                        ),
-                                        li: ({ node, ...props }) => (
-                                          <li className="mb-1" {...props} />
-                                        ),
-                                        a: ({ node, ...props }) => (
-                                          <a
-                                            className="text-indigo-600 hover:underline flex items-center"
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            {...props}
-                                          >
-                                            {props.children}
-                                            <ExternalLink className="w-3 h-3 ml-1" />
-                                          </a>
-                                        ),
-                                        strong: ({ node, ...props }) => (
-                                          <strong
-                                            className="font-bold"
-                                            {...props}
-                                          />
-                                        ),
-                                        em: ({ node, ...props }) => (
-                                          <em className="italic" {...props} />
-                                        ),
-                                        blockquote: ({ node, ...props }) => (
-                                          <blockquote
-                                            className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
-                                            {...props}
-                                          />
-                                        ),
-                                        // Add styling for code blocks
-                                        code: ({
-                                          node,
-                                          inline,
-                                          className,
-                                          children,
-                                          ...props
-                                        }: any) => {
-                                          return inline ? (
-                                            <code
-                                              className="bg-gray-100 px-1 py-0.5 rounded text-indigo-600 text-sm"
-                                              {...props}
-                                            >
-                                              {children}
-                                            </code>
-                                          ) : (
-                                            <div className="bg-gray-50 rounded-md p-4 my-3 overflow-x-auto border border-gray-100">
-                                              <code
-                                                className="text-sm font-mono text-gray-800"
+                                    <div
+                                      className={`markdown-content ${
+                                        showPrivacyMode ? "privacy-blur" : ""
+                                      }`}
+                                    >
+                                      {showPrivacyMode ? (
+                                        <div
+                                          onClick={() =>
+                                            setShowPrivacyMode(false)
+                                          }
+                                          className="p-3 cursor-pointer text-center"
+                                        >
+                                          Content hidden for privacy. Click to
+                                          view.
+                                        </div>
+                                      ) : (
+                                        <ReactMarkdown
+                                          components={{
+                                            h1: ({ node, ...props }) => (
+                                              <h1
+                                                className="text-xl font-bold my-3"
+                                                {...props}
+                                              />
+                                            ),
+                                            h2: ({ node, ...props }) => (
+                                              <h2
+                                                className="text-lg font-bold my-2"
+                                                {...props}
+                                              />
+                                            ),
+                                            h3: ({ node, ...props }) => (
+                                              <h3
+                                                className="text-md font-semibold my-2"
+                                                {...props}
+                                              />
+                                            ),
+                                            p: ({ node, ...props }) => (
+                                              <p className="mb-3" {...props} />
+                                            ),
+                                            ul: ({ node, ...props }) => (
+                                              <ul
+                                                className="list-disc pl-5 mb-3"
+                                                {...props}
+                                              />
+                                            ),
+                                            ol: ({ node, ...props }) => (
+                                              <ol
+                                                className="list-decimal pl-5 mb-3"
+                                                {...props}
+                                              />
+                                            ),
+                                            li: ({ node, ...props }) => (
+                                              <li className="mb-1" {...props} />
+                                            ),
+                                            a: ({ node, ...props }) => (
+                                              <a
+                                                className="text-indigo-600 hover:underline flex items-center"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
                                                 {...props}
                                               >
-                                                {children}
-                                              </code>
-                                            </div>
-                                          );
-                                        },
-                                        pre: ({ node, ...props }) => (
-                                          <pre
-                                            className="bg-transparent p-0 overflow-visible"
-                                            {...props}
-                                          />
-                                        ),
-                                      }}
-                                    >
-                                      {message.content}
-                                    </ReactMarkdown>
-                                  )}
-                                </div>
-
-                                {/* Action buttons */}
-                                <div className="flex space-x-2 mt-1">
-                                  <button
-                                    className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-2 py-1 rounded-full transition-colors flex items-center bg-white/80"
-                                    onClick={() =>
-                                      handleCopyText(message.content)
-                                    }
-                                  >
-                                    {copied ? (
-                                      <>
-                                        <CheckIcon className="w-3 h-3 text-green-500 mr-1" />
-                                        <span className="text-green-500">
-                                          Copied
+                                                {props.children}
+                                                <ExternalLink className="w-3 h-3 ml-1" />
+                                              </a>
+                                            ),
+                                            strong: ({ node, ...props }) => (
+                                              <strong
+                                                className="font-bold"
+                                                {...props}
+                                              />
+                                            ),
+                                            em: ({ node, ...props }) => (
+                                              <em
+                                                className="italic"
+                                                {...props}
+                                              />
+                                            ),
+                                            blockquote: ({
+                                              node,
+                                              ...props
+                                            }) => (
+                                              <blockquote
+                                                className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
+                                                {...props}
+                                              />
+                                            ),
+                                          }}
+                                        >
+                                          {message.content}
+                                        </ReactMarkdown>
+                                      )}
+                                    </div>
+                                    {/* Blinking cursor at the end */}
+                                    <div className="typing-cursor"></div>
+                                  </div>
+                                ) : (
+                                  /* Standard AI message - directly on canvas, no box */
+                                  <div className="flex-1">
+                                    {/* Performance metrics - show token count */}
+                                    {message.tokens && (
+                                      <div className="flex items-center text-xs text-gray-400 mb-1">
+                                        <span className="flex items-center opacity-50">
+                                          {message.tokens} tokens
                                         </span>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Clipboard className="w-3 h-3 mr-1" />
-                                        Copy
-                                      </>
+                                      </div>
                                     )}
-                                  </button>
 
-                                  <button
-                                    className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-2 py-1 rounded-full transition-colors flex items-center bg-white/80"
-                                    onClick={() =>
-                                      handleSpeakText(message.content, index)
-                                    }
-                                  >
-                                    {speakingMessageIndex === index ? (
-                                      <>
-                                        <VolumeX className="w-3 h-3 mr-1" />
-                                        Stop
-                                      </>
-                                    ) : (
-                                      <>
-                                        <Volume2 className="w-3 h-3 mr-1" />
-                                        Listen
-                                      </>
-                                    )}
-                                  </button>
-                                </div>
+                                    {/* Message content directly on canvas */}
+                                    <div
+                                      className={`text-gray-800 overflow-wrap-anywhere markdown-content ${
+                                        showPrivacyMode ? "privacy-blur" : ""
+                                      }`}
+                                    >
+                                      {showPrivacyMode ? (
+                                        <div
+                                          onClick={() =>
+                                            setShowPrivacyMode(false)
+                                          }
+                                          className="p-3 cursor-pointer text-center"
+                                        >
+                                          Content hidden for privacy. Click to
+                                          view.
+                                        </div>
+                                      ) : (
+                                        <ReactMarkdown
+                                          components={{
+                                            h1: ({ node, ...props }) => (
+                                              <h1
+                                                className="text-xl font-bold my-3"
+                                                {...props}
+                                              />
+                                            ),
+                                            h2: ({ node, ...props }) => (
+                                              <h2
+                                                className="text-lg font-bold my-2"
+                                                {...props}
+                                              />
+                                            ),
+                                            h3: ({ node, ...props }) => (
+                                              <h3
+                                                className="text-md font-semibold my-2"
+                                                {...props}
+                                              />
+                                            ),
+                                            p: ({ node, ...props }) => (
+                                              <p className="mb-3" {...props} />
+                                            ),
+                                            ul: ({ node, ...props }) => (
+                                              <ul
+                                                className="list-disc pl-5 mb-3"
+                                                {...props}
+                                              />
+                                            ),
+                                            ol: ({ node, ...props }) => (
+                                              <ol
+                                                className="list-decimal pl-5 mb-3"
+                                                {...props}
+                                              />
+                                            ),
+                                            li: ({ node, ...props }) => (
+                                              <li className="mb-1" {...props} />
+                                            ),
+                                            a: ({ node, ...props }) => (
+                                              <a
+                                                className="text-indigo-600 hover:underline flex items-center"
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                {...props}
+                                              >
+                                                {props.children}
+                                                <ExternalLink className="w-3 h-3 ml-1" />
+                                              </a>
+                                            ),
+                                            strong: ({ node, ...props }) => (
+                                              <strong
+                                                className="font-bold"
+                                                {...props}
+                                              />
+                                            ),
+                                            em: ({ node, ...props }) => (
+                                              <em
+                                                className="italic"
+                                                {...props}
+                                              />
+                                            ),
+                                            blockquote: ({
+                                              node,
+                                              ...props
+                                            }) => (
+                                              <blockquote
+                                                className="border-l-4 border-indigo-300 pl-4 italic my-3 text-gray-600"
+                                                {...props}
+                                              />
+                                            ),
+                                            // Add styling for code blocks
+                                            code: ({
+                                              node,
+                                              inline,
+                                              className,
+                                              children,
+                                              ...props
+                                            }: any) => {
+                                              return inline ? (
+                                                <code
+                                                  className="bg-gray-100 px-1 py-0.5 rounded text-indigo-600 text-sm"
+                                                  {...props}
+                                                >
+                                                  {children}
+                                                </code>
+                                              ) : (
+                                                <div className="bg-gray-50 rounded-md p-4 my-3 overflow-x-auto border border-gray-100">
+                                                  <code
+                                                    className="text-sm font-mono text-gray-800"
+                                                    {...props}
+                                                  >
+                                                    {children}
+                                                  </code>
+                                                </div>
+                                              );
+                                            },
+                                            pre: ({ node, ...props }) => (
+                                              <pre
+                                                className="bg-transparent p-0 overflow-visible"
+                                                {...props}
+                                              />
+                                            ),
+                                          }}
+                                        >
+                                          {message.content}
+                                        </ReactMarkdown>
+                                      )}
+                                    </div>
+
+                                    {/* Action buttons */}
+                                    <div className="flex space-x-2 mt-1">
+                                      <button
+                                        className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-2 py-1 rounded-full transition-colors flex items-center bg-white/80"
+                                        onClick={() =>
+                                          handleCopyText(message.content)
+                                        }
+                                      >
+                                        {copied ? (
+                                          <>
+                                            <CheckIcon className="w-3 h-3 text-green-500 mr-1" />
+                                            <span className="text-green-500">
+                                              Copied
+                                            </span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Clipboard className="w-3 h-3 mr-1" />
+                                            Copy
+                                          </>
+                                        )}
+                                      </button>
+
+                                      <button
+                                        className="text-xs text-gray-500 hover:text-gray-800 border border-gray-200 hover:border-gray-300 px-2 py-1 rounded-full transition-colors flex items-center bg-white/80"
+                                        onClick={() =>
+                                          handleSpeakText(
+                                            message.content,
+                                            index
+                                          )
+                                        }
+                                      >
+                                        {speakingMessageIndex === index ? (
+                                          <>
+                                            <VolumeX className="w-3 h-3 mr-1" />
+                                            Stop
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Volume2 className="w-3 h-3 mr-1" />
+                                            Listen
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             )}
-                          </div>
-                        )}
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
+                          </motion.div>
+                        ))}
+                      </AnimatePresence>
 
-                  {/* Thinking indicator that appears when generating */}
-                  {generatingText && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-start gap-3 mb-6"
-                    >
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden bg-gradient-to-r from-indigo-100 to-purple-100">
-                        <span className="text-lg">✿</span>
-                      </div>
-                      <div className="elegant-generating">
-                        <span className="pulse-ring"></span>
-                        <span className="ml-2 text-sm text-gray-500 font-light">
-                          Thinking...
-                        </span>
-                      </div>
-                    </motion.div>
-                  )}
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                      {/* Thinking indicator that appears when generating */}
+                      {generatingText && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="flex items-start gap-3 mb-6"
+                        >
+                          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 border border-gray-200 overflow-hidden bg-gradient-to-r from-indigo-100 to-purple-100">
+                            <span className="text-lg">✿</span>
+                          </div>
+                          <div className="elegant-generating">
+                            <span className="pulse-ring"></span>
+                            <span className="ml-2 text-sm text-gray-500 font-light">
+                              Thinking...
+                            </span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </>
+        )}
 
         {/* Input Area - Always at bottom */}
         <div
@@ -1286,8 +1333,14 @@ export default function ChatPage() {
                     ? "bg-indigo-50 text-indigo-600"
                     : "text-gray-400 hover:text-gray-600"
                 }`}
-                aria-label={showPrivacyMode ? "Disable privacy mode" : "Enable privacy mode"}
-                title={showPrivacyMode ? "Privacy mode is on" : "Enable privacy mode"}
+                aria-label={
+                  showPrivacyMode
+                    ? "Disable privacy mode"
+                    : "Enable privacy mode"
+                }
+                title={
+                  showPrivacyMode ? "Privacy mode is on" : "Enable privacy mode"
+                }
               >
                 <EyeOff className="w-4 h-4" />
               </button>
@@ -1453,10 +1506,8 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* Removed Footer component */}
-
       <AnimatePresence>
-        {isRecording && (
+        {isRecording && chatMode === "chat" && (
           <motion.div
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -1476,7 +1527,7 @@ export default function ChatPage() {
           </motion.div>
         )}
 
-        {processingAudio && !isRecording && (
+        {processingAudio && !isRecording && chatMode === "chat" && (
           <motion.div
             initial={{ y: 50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
@@ -1862,7 +1913,8 @@ export default function ChatPage() {
         }
 
         @keyframes voiceWave {
-          0%, 100% {
+          0%,
+          100% {
             transform: scaleY(0.5);
             opacity: 0.5;
           }
