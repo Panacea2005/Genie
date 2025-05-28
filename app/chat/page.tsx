@@ -52,8 +52,6 @@ const Navbar = dynamic(() => import("@/components/navbar"), {
   ssr: false,
 });
 
-// Removed Footer component import
-
 // Import the GradientSphere component
 const GradientSphere = dynamic(() => import("@/components/gradient-sphere"), {
   ssr: false,

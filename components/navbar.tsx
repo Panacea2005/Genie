@@ -215,6 +215,11 @@ export default function Navbar({ currentPage = "home" }: { currentPage?: string 
           Dashboard
         </NavButton>
 
+        {/* Dashboard button - forth */}
+        <NavButton href="/meditation" variant="ghost" className="text-xs text-gray-500 font-light">
+          Meditation
+        </NavButton>
+
         {loading ? (
           // Loading state
           <div className="w-5 h-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin"></div>
