@@ -334,7 +334,7 @@ export default function Home() {
                 transition={{ delay: 0.6, duration: 0.4 }}
               >
                 <p className="text-xs text-gray-400 font-light mt-2">
-                  Scroll to see more examples
+                  Scroll to explore
                 </p>
               </motion.div>
             )}

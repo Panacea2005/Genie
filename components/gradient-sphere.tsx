@@ -3,7 +3,18 @@
 import { useEffect, useRef } from "react"
 import { motion } from "framer-motion"
 
-export default function GradientSphere() {
+interface ColorTheme {
+  center: string;
+  mid1: string;
+  mid2: string;
+  edge: string;
+}
+
+interface GradientSphereProps {
+  colors?: ColorTheme;
+}
+
+export default function GradientSphere({ colors }: GradientSphereProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const sphereRef = useRef<{
     rotation: number;
@@ -15,6 +26,16 @@ export default function GradientSphere() {
     animate: true,
   })
 
+  // Default colors if none provided
+  const defaultColors: ColorTheme = {
+    center: 'rgba(190, 205, 255, 0.95)', // Light blue center
+    mid1: 'rgba(180, 190, 255, 0.9)',    // Light lavender
+    mid2: 'rgba(200, 180, 255, 0.8)',    // Light purple
+    edge: 'rgba(220, 175, 230, 0.6)',    // Light pink/purple
+  }
+
+  const currentColors = colors || defaultColors;
+
   // Animation effect with enhanced "living" behavior
   useEffect(() => {
     const canvas = canvasRef.current
@@ -25,7 +46,6 @@ export default function GradientSphere() {
 
     // Set canvas dimensions with a larger size
     const setCanvasDimensions = () => {
-      // Make the sphere larger to accommodate the search bar on top
       const size = Math.min(window.innerWidth * 0.9, 700)
       canvas.width = size
       canvas.height = size
@@ -42,23 +62,20 @@ export default function GradientSphere() {
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
       
-      // Calculate distance from center
       const centerX = canvas.width / 2
       const centerY = canvas.height / 2
-      const distX = (x - centerX) / centerX // -1 to 1
-      const distY = (y - centerY) / centerY // -1 to 1
+      const distX = (x - centerX) / centerX
+      const distY = (y - centerY) / centerY
       
-      // Adjust speed based on mouse position - creates "living" response
       sphereRef.current.speed = 0.005 + Math.abs(distX * distY) * 0.003
     }
     
     window.addEventListener('mousemove', handleMouseMove)
     
-    // Add occasional "breathing" effect for more organic feeling
+    // Add occasional "breathing" effect
     const breathingInterval = setInterval(() => {
       sphereRef.current.speed = 0.005 + Math.random() * 0.01
       
-      // After a short while, return to normal speed
       setTimeout(() => {
         sphereRef.current.speed = 0.005
       }, 800)
@@ -76,27 +93,26 @@ export default function GradientSphere() {
       // Clear canvas
       ctx.clearRect(0, 0, width, height)
       
-      // Create gradient with subtle rainbow colors like the reference image
+      // Create gradient with custom colors
       const angle = sphereRef.current.rotation
       const currentTime = Date.now() / 1000
       
-      // More organic movement for gradient center
+      // Organic movement for gradient center
       const pulseSize = Math.sin(currentTime * 0.8) * 0.05 + 0.1
       const gradientX = centerX + Math.sin(angle * 0.7) * radius * pulseSize
       const gradientY = centerY + Math.cos(angle * 0.5) * radius * pulseSize
       
       const gradient = ctx.createRadialGradient(
-        gradientX, gradientY, radius * 0.2,  // Inner circle
-        centerX, centerY, radius             // Outer circle
+        gradientX, gradientY, radius * 0.2,
+        centerX, centerY, radius
       )
       
-      // Light rainbow gradient similar to the reference image
-      // Blue/purple center transitioning to pink/purple edges
-      gradient.addColorStop(0, 'rgba(190, 205, 255, 0.95)') // Light blue center
-      gradient.addColorStop(0.4, 'rgba(180, 190, 255, 0.9)') // Light lavender
-      gradient.addColorStop(0.7, 'rgba(200, 180, 255, 0.8)') // Light purple
-      gradient.addColorStop(0.85, 'rgba(220, 175, 230, 0.6)') // Light pink/purple
-      gradient.addColorStop(1, 'rgba(180, 160, 220, 0)')      // Transparent edge
+      // Apply the color theme
+      gradient.addColorStop(0, currentColors.center)
+      gradient.addColorStop(0.4, currentColors.mid1)
+      gradient.addColorStop(0.7, currentColors.mid2)
+      gradient.addColorStop(0.85, currentColors.edge)
+      gradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
       
       // Draw main sphere
       ctx.beginPath()
@@ -104,10 +120,10 @@ export default function GradientSphere() {
       ctx.fillStyle = gradient
       ctx.fill()
       
-      // Enhanced "living" highlight that matches the reference image
+      // Enhanced highlight
       const now = Date.now() / 1000
       
-      // Primary highlight - creates the blue/white inner glow
+      // Primary highlight - white glow
       const highlightRadius = radius * 0.7
       const organicMovement = Math.sin(now * 0.4) * radius * 0.05
       const highlightX = centerX - radius * 0.1 + Math.sin(angle * 0.8) * radius * 0.08 + organicMovement
@@ -118,7 +134,6 @@ export default function GradientSphere() {
         highlightX, highlightY, highlightRadius
       )
       
-      // Bright center highlight transitioning to transparent
       highlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0.8)')
       highlightGradient.addColorStop(0.4, 'rgba(240, 250, 255, 0.4)')
       highlightGradient.addColorStop(1, 'rgba(255, 255, 255, 0)')
@@ -128,7 +143,7 @@ export default function GradientSphere() {
       ctx.fillStyle = highlightGradient
       ctx.fill()
       
-      // Pink edge highlight - creates the pinkish glow at edges
+      // Edge highlight - using the edge color
       const edgeHighlightRadius = radius * 0.6
       const edgeHighlightX = centerX + radius * 0.4 + Math.cos(now * 0.7) * radius * 0.05
       const edgeHighlightY = centerY - radius * 0.3 + Math.sin(now * 0.9) * radius * 0.05
@@ -138,16 +153,19 @@ export default function GradientSphere() {
         edgeHighlightX, edgeHighlightY, edgeHighlightRadius
       )
       
-      edgeHighlightGradient.addColorStop(0, 'rgba(255, 200, 255, 0)')
-      edgeHighlightGradient.addColorStop(0.7, 'rgba(230, 190, 240, 0.2)')
-      edgeHighlightGradient.addColorStop(1, 'rgba(210, 180, 240, 0.4)')
+      // Extract RGB values from edge color for dynamic highlight
+      const edgeColorWithAlpha = currentColors.edge.replace(/[\d.]+\)$/, '0.3)');
+      
+      edgeHighlightGradient.addColorStop(0, 'rgba(255, 255, 255, 0)')
+      edgeHighlightGradient.addColorStop(0.7, edgeColorWithAlpha)
+      edgeHighlightGradient.addColorStop(1, currentColors.edge)
       
       ctx.beginPath()
       ctx.arc(edgeHighlightX, edgeHighlightY, edgeHighlightRadius, 0, Math.PI * 2)
       ctx.fillStyle = edgeHighlightGradient
       ctx.fill()
       
-      // Add internal "living" movement instead of orbit particles
+      // Internal layers
       const innerLayerCount = 3
       for (let i = 0; i < innerLayerCount; i++) {
         const layerRadius = radius * (0.3 + i * 0.2)
@@ -161,7 +179,6 @@ export default function GradientSphere() {
           innerX, innerY, layerRadius
         )
         
-        // More subtle, whiter colors
         innerGradient.addColorStop(0, `rgba(255, 255, 255, ${0.5 - i * 0.15})`)
         innerGradient.addColorStop(0.7, `rgba(240, 245, 255, ${0.2 - i * 0.05})`)
         innerGradient.addColorStop(1, 'rgba(240, 245, 255, 0)')
@@ -187,7 +204,10 @@ export default function GradientSphere() {
       window.removeEventListener('mousemove', handleMouseMove)
       clearInterval(breathingInterval)
     }
-  }, [])
+  }, [currentColors]) // Re-run effect when colors change
+
+  // Extract main color from center for the glow
+  const glowColor = currentColors.center.replace(/[\d.]+\)$/, '0.4)');
 
   return (
     <motion.div 
@@ -213,8 +233,21 @@ export default function GradientSphere() {
         style={{ filter: "blur(8px)", maxWidth: "90%" }}
       />
       
-      {/* Subtle background glow effect */}
-      <div className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-100 via-purple-50 to-pink-100 opacity-40 blur-3xl -z-10" />
+      {/* Dynamic background glow based on color theme */}
+      <motion.div 
+        className="absolute inset-0 rounded-full opacity-40 blur-3xl -z-10"
+        style={{
+          background: `radial-gradient(circle, ${glowColor} 0%, transparent 70%)`
+        }}
+        animate={{
+          scale: [1, 1.1, 1],
+        }}
+        transition={{
+          duration: 4,
+          repeat: Infinity,
+          ease: "easeInOut"
+        }}
+      />
     </motion.div>
   )
 }

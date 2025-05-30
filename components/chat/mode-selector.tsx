@@ -20,20 +20,24 @@ export default function ModeSelector({
     {
       id: "chat" as const,
       name: "Chat",
-      symbol: "◐",
-      gradient: { from: "#6366f1", to: "#818cf8" },
-      glow: "rgba(99, 102, 241, 0.3)",
-      description: "Text conversation",
-      animation: "rotate"
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" 
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )
     },
     {
       id: "speech" as const,
       name: "Voice",
-      symbol: "◉",
-      gradient: { from: "#ec4899", to: "#f472b6" },
-      glow: "rgba(236, 72, 153, 0.3)",
-      description: "Voice conversation",
-      animation: "pulse"
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" 
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" 
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      )
     },
   ];
 
@@ -52,231 +56,91 @@ export default function ModeSelector({
 
   return (
     <div ref={dropdownRef} className="relative">
-      {/* Enhanced selector button */}
+      {/* Minimal mode toggle */}
       <motion.button
         onClick={() => setIsOpen(!isOpen)}
-        className="relative group flex items-center gap-3 py-2 px-4 rounded-2xl transition-all duration-500"
-        style={{
-          background: isOpen ? 'rgba(255, 255, 255, 0.9)' : 'rgba(255, 255, 255, 0.5)',
-          backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          boxShadow: isOpen ? '0 8px 32px rgba(0, 0, 0, 0.08)' : '0 2px 8px rgba(0, 0, 0, 0.04)'
-        }}
-        whileHover={{ scale: 1.02, y: -1 }}
+        className="relative flex items-center gap-2 py-1.5 px-3 rounded-full
+                   bg-white/50 backdrop-blur-sm border border-gray-100
+                   hover:bg-white/70 transition-all duration-300"
+        whileHover={{ scale: 1.02 }}
         whileTap={{ scale: 0.98 }}
       >
-        {/* Animated mode orb */}
-        <div className="relative">
-          <motion.div
-            className="w-6 h-6 rounded-full flex items-center justify-center relative overflow-hidden"
-            style={{
-              background: `linear-gradient(135deg, ${currentMode.gradient.from}, ${currentMode.gradient.to})`,
-              boxShadow: `0 0 20px ${currentMode.glow}`
-            }}
-          >
-            {/* Inner animation based on mode */}
-            {currentMode.animation === "pulse" ? (
-              <>
-                <motion.div
-                  className="absolute inset-0 rounded-full"
-                  style={{ background: currentMode.gradient.from }}
-                  animate={{
-                    scale: [0, 1.5],
-                    opacity: [0.6, 0],
-                  }}
-                  transition={{
-                    duration: 1.5,
-                    repeat: Infinity,
-                    ease: "easeOut"
-                  }}
-                />
-                <motion.div
-                  className="absolute inset-0 rounded-full"
-                  style={{ background: currentMode.gradient.to }}
-                  animate={{
-                    scale: [0, 1.5],
-                    opacity: [0.6, 0],
-                  }}
-                  transition={{
-                    duration: 1.5,
-                    repeat: Infinity,
-                    ease: "easeOut",
-                    delay: 0.5
-                  }}
-                />
-              </>
-            ) : (
-              <motion.div
-                className="absolute inset-0"
-                style={{
-                  background: `conic-gradient(from 0deg, transparent, ${currentMode.gradient.from}, ${currentMode.gradient.to}, transparent)`,
-                }}
-                animate={{ rotate: 360 }}
-                transition={{
-                  duration: 3,
-                  repeat: Infinity,
-                  ease: "linear"
-                }}
-              />
-            )}
-            
-            <span className="text-white text-xs font-light relative z-10">
-              {currentMode.symbol}
-            </span>
-          </motion.div>
-          
-          {/* Mode indicator dot */}
-          <motion.div
-            className="absolute -top-1 -right-1 w-2 h-2 rounded-full"
-            style={{ background: currentMode.gradient.from }}
-            animate={{
-              scale: [0.8, 1.2, 0.8],
-              opacity: [1, 0.5, 1]
-            }}
-            transition={{
-              duration: 2,
-              repeat: Infinity,
-              ease: "easeInOut"
-            }}
-          />
+        {/* Mode icon */}
+        <div className="text-gray-600">
+          {currentMode.icon}
         </div>
         
         {/* Mode name */}
-        <span className="text-sm font-light text-gray-700 tracking-wide">
+        <span className="text-xs font-light text-gray-700">
           {currentMode.name}
         </span>
         
-        {/* Animated chevron */}
-        <motion.svg 
-          width="16" 
-          height="16" 
-          viewBox="0 0 24 24" 
-          fill="none"
-          animate={{ rotate: isOpen ? 180 : 0 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-          className="ml-auto"
-        >
-          <path 
-            d="M6 9L12 15L18 9" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
-            className="text-gray-400"
-          />
-        </motion.svg>
+        {/* Subtle indicator */}
+        <motion.div
+          className="w-0.5 h-0.5 rounded-full bg-gray-400"
+          animate={{ opacity: isOpen ? 0 : 1 }}
+        />
       </motion.button>
       
-      {/* Glass morphism dropdown */}
+      {/* Clean dropdown */}
       <AnimatePresence>
         {isOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40"
-              onClick={() => setIsOpen(false)}
-            />
-            
-            <motion.div
-              initial={{ opacity: 0, y: -10, scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -10, scale: 0.95 }}
-              transition={{ 
-                type: "spring",
-                stiffness: 300,
-                damping: 30
-              }}
-              className="absolute top-full mt-2 right-0 z-50"
-              style={{
-                background: 'rgba(255, 255, 255, 0.95)',
-                backdropFilter: 'blur(20px)',
-                borderRadius: '20px',
-                border: '1px solid rgba(255, 255, 255, 0.3)',
-                boxShadow: '0 20px 40px rgba(0, 0, 0, 0.1)',
-                minWidth: '220px'
-              }}
-            >
-              {/* Glass overlay */}
-              <div className="absolute inset-0 rounded-[20px] bg-gradient-to-b from-white/50 to-white/0 pointer-events-none" />
-              
-              <div className="relative p-2">
-                {modes.map((mode, index) => (
-                  <motion.button
-                    key={mode.id}
-                    onClick={() => {
-                      onModeChange(mode.id);
-                      setIsOpen(false);
-                    }}
-                    className="w-full text-left rounded-2xl transition-all duration-300 mb-1 last:mb-0"
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                    whileHover={{ 
-                      backgroundColor: 'rgba(0, 0, 0, 0.02)',
-                      x: 4 
-                    }}
-                    whileTap={{ scale: 0.98 }}
-                  >
-                    <div className="flex items-center gap-3 p-3">
-                      {/* Mode orb */}
-                      <div className="relative">
-                        <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center"
-                          style={{
-                            background: `linear-gradient(135deg, ${mode.gradient.from}, ${mode.gradient.to})`,
-                            boxShadow: selectedMode === mode.id 
-                              ? `0 0 24px ${mode.glow}` 
-                              : `0 0 12px ${mode.glow}`
-                          }}
-                        >
-                          <span className="text-white text-sm font-light">
-                            {mode.symbol}
-                          </span>
-                        </div>
-                        
-                        {/* Active mode indicator */}
-                        {selectedMode === mode.id && (
-                          <motion.div
-                            className="absolute -bottom-1 left-1/2 -translate-x-1/2 h-1 w-4 rounded-full"
-                            layoutId="activeModeBar"
-                            style={{ background: mode.gradient.from }}
-                            transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                          />
-                        )}
-                      </div>
-                      
-                      {/* Mode details */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm transition-all duration-300 ${
-                            selectedMode === mode.id 
-                              ? "text-gray-900 font-medium" 
-                              : "text-gray-700"
-                          }`}>
-                            {mode.name}
-                          </span>
-                          {selectedMode === mode.id && (
-                            <motion.div
-                              initial={{ scale: 0, opacity: 0 }}
-                              animate={{ scale: 1, opacity: 1 }}
-                              className="w-1.5 h-1.5 rounded-full"
-                              style={{ background: mode.gradient.from }}
-                            />
-                          )}
-                        </div>
-                        <span className="text-xs text-gray-500 mt-0.5 block">
-                          {mode.description}
-                        </span>
-                      </div>
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.15 }}
+            className="absolute top-full mt-1 right-0 z-50
+                       bg-white/90 backdrop-blur-md rounded-2xl border border-gray-100
+                       shadow-[0_8px_30px_rgba(0,0,0,0.04)]"
+            style={{ minWidth: '140px' }}
+          >
+            <div className="p-1">
+              {modes.map((mode) => (
+                <motion.button
+                  key={mode.id}
+                  onClick={() => {
+                    onModeChange(mode.id);
+                    setIsOpen(false);
+                  }}
+                  className={`w-full text-left rounded-xl p-3 transition-all duration-200
+                            ${selectedMode === mode.id 
+                              ? 'bg-gray-50' 
+                              : 'hover:bg-gray-50/50'}`}
+                  whileHover={{ x: 2 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* Icon */}
+                    <div className={`transition-colors
+                                   ${selectedMode === mode.id 
+                                     ? 'text-gray-900' 
+                                     : 'text-gray-500'}`}>
+                      {mode.icon}
                     </div>
-                  </motion.button>
-                ))}
-              </div>
-            </motion.div>
-          </>
+                    
+                    {/* Name */}
+                    <span className={`text-sm font-light transition-colors
+                                    ${selectedMode === mode.id 
+                                      ? 'text-gray-900' 
+                                      : 'text-gray-600'}`}>
+                      {mode.name}
+                    </span>
+                    
+                    {/* Active indicator */}
+                    {selectedMode === mode.id && (
+                      <motion.div
+                        className="w-1 h-1 rounded-full bg-gray-400 ml-auto"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 500 }}
+                      />
+                    )}
+                  </div>
+                </motion.button>
+              ))}
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
