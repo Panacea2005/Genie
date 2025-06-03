@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState, useRef, useMemo } from "react"
 import Image from "next/image"
 import { motion, AnimatePresence, useAnimation } from "framer-motion"
 
 export default function LoadingAnimation() {
   // Animation state management
   const [showAnimation, setShowAnimation] = useState(true)
+  const [isMounted, setIsMounted] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   
   // Advanced animation controls
@@ -25,22 +26,64 @@ export default function LoadingAnimation() {
   const timeoutsRef = useRef<Array<NodeJS.Timeout>>([])
   const animationFrameRef = useRef<number | null>(null)
   
-  // Generate particles for flower pattern
-  const particleCount = 30
-  const particles = Array.from({ length: particleCount }).map((_, i) => ({
-    id: i,
-    scale: 0.2 + Math.random() * 0.8,
-    x: Math.random() * 250 - 125,
-    y: Math.random() * 250 - 125,
-    rotation: Math.random() * 360,
-    opacity: 0.3 + Math.random() * 0.7,
-    delay: Math.random() * 1.5,
-    duration: 2 + Math.random() * 1.5,
-  }))
+  // Generate particles with fixed seed to avoid hydration mismatch
+  const particles = useMemo(() => {
+    const particleCount = 30
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000
+      return x - Math.floor(x)
+    }
+    
+    return Array.from({ length: particleCount }).map((_, i) => {
+      const seed = i * 1.1
+      return {
+        id: i,
+        scale: 0.2 + seededRandom(seed) * 0.8,
+        x: seededRandom(seed + 1) * 250 - 125,
+        y: seededRandom(seed + 2) * 250 - 125,
+        rotation: seededRandom(seed + 3) * 360,
+        opacity: 0.3 + seededRandom(seed + 4) * 0.7,
+        delay: seededRandom(seed + 5) * 1.5,
+        duration: 2 + seededRandom(seed + 6) * 1.5,
+        size: 2 + seededRandom(seed + 7) * 4,
+      }
+    })
+  }, [])
 
-  // Smooth color transition animation
+  // Generate floating particles with fixed seed
+  const floatingParticles = useMemo(() => {
+    const seededRandom = (seed: number) => {
+      const x = Math.sin(seed) * 10000
+      return x - Math.floor(x)
+    }
+    
+    return Array.from({ length: 12 }).map((_, i) => {
+      const seed = (i + 100) * 1.3
+      return {
+        id: i,
+        size: 10 + seededRandom(seed) * 40,
+        initialX: seededRandom(seed + 1) * 100,
+        initialY: seededRandom(seed + 2) * 100,
+        midX: seededRandom(seed + 3) * 100,
+        midY: seededRandom(seed + 4) * 100,
+        endX: seededRandom(seed + 5) * 100,
+        endY: seededRandom(seed + 6) * 100,
+        duration: 8 + seededRandom(seed + 7) * 7,
+        delay: seededRandom(seed + 8) * 2,
+      }
+    })
+  }, [])
+
+  // Set mounted state to enable client-only features
   useEffect(() => {
-    const colorDuration = 12000 // Extended color transition duration
+    setIsMounted(true)
+  }, [])
+
+  // Smooth color transition animation - only on client
+  useEffect(() => {
+    if (!isMounted) return
+
+    const colorDuration = 12000
     const startTime = Date.now()
 
     const updateColorProgress = () => {
@@ -58,10 +101,12 @@ export default function LoadingAnimation() {
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [])
+  }, [isMounted])
 
   // Main choreographed animation sequence
   useEffect(() => {
+    if (!isMounted) return
+
     const animationSequence = async () => {
       // 1. Start with flower pattern animation
       flowerControls.start({
@@ -87,7 +132,7 @@ export default function LoadingAnimation() {
         timeoutsRef.current.push(timeout)
       })
       
-      // 2. Flower transforms into sphere - shrink flower as sphere grows
+      // 2. Flower transforms into sphere
       flowerControls.start({
         opacity: [1, 0.7, 0.3, 0],
         scale: [1, 0.9, 0.6, 0.3],
@@ -155,7 +200,7 @@ export default function LoadingAnimation() {
         }
       })
       
-      // Background gradient fades in as sphere expands
+      // Background gradient fades in
       backgroundControls.start({
         opacity: 1,
         transition: { duration: 2, ease: "easeInOut", delay: 0.5 }
@@ -184,13 +229,13 @@ export default function LoadingAnimation() {
         timeoutsRef.current.push(timeout)
       })
       
-      // 5. Fade to white to transition to app
+      // 5. Fade to white
       overlayControls.start({
         opacity: 1,
         transition: { duration: 1.8, ease: "easeInOut" }
       })
       
-      // Final pause before completing
+      // Final pause
       await new Promise(resolve => {
         const timeout = setTimeout(resolve, 1500)
         timeoutsRef.current.push(timeout)
@@ -200,21 +245,18 @@ export default function LoadingAnimation() {
       setShowAnimation(false)
     }
     
-    // Start the animation sequence
     animationSequence()
     
-    // Clean up timeouts and animation frames on unmount
     return () => {
       timeoutsRef.current.forEach(clearTimeout)
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current)
       }
     }
-  }, [flowerControls, sphereControls, backgroundControls, overlayControls, pulseControls, logoControls, particleControls])
+  }, [isMounted, flowerControls, sphereControls, backgroundControls, overlayControls, pulseControls, logoControls, particleControls])
 
   // Advanced color interpolation function
   const interpolateColor = (color1: string, color2: string, factor: number) => {
-    // Convert hex to RGB
     const hex2rgb = (hex: string) => {
       const r = parseInt(hex.slice(1, 3), 16)
       const g = parseInt(hex.slice(3, 5), 16)
@@ -222,10 +264,8 @@ export default function LoadingAnimation() {
       return [r, g, b]
     }
     
-    // Apply easing to factor
     const easedFactor = 0.5 - Math.cos(factor * Math.PI) / 2
     
-    // Convert colors and interpolate
     const [r1, g1, b1] = hex2rgb(color1)
     const [r2, g2, b2] = hex2rgb(color2)
     
@@ -236,13 +276,16 @@ export default function LoadingAnimation() {
     return `rgb(${r}, ${g}, ${b})`
   }
   
-  // Dynamic sphere gradient styles
-  const sphereGradient = {
+  // Dynamic sphere gradient styles - only apply on client
+  const sphereGradient = isMounted ? {
     background: `radial-gradient(circle, 
       ${interpolateColor("#c084fc", "#93c5fd", colorProgress)} 0%, 
       ${interpolateColor("#60a5fa", "#818cf8", colorProgress)} 50%, 
       ${interpolateColor("#93c5fd", "#c084fc", colorProgress)} 100%)`,
     filter: `blur(${4 + Math.sin(colorProgress * Math.PI * 4) * 2}px)`,
+  } : {
+    background: `radial-gradient(circle, #c084fc 0%, #60a5fa 50%, #93c5fd 100%)`,
+    filter: `blur(4px)`,
   }
 
   if (!showAnimation) {
@@ -275,44 +318,48 @@ export default function LoadingAnimation() {
               style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,0.5))" }}
             />
             
-            {/* Particle effect around flower */}
-            <motion.div
-              className="absolute w-full h-full"
-              initial={{ opacity: 0 }}
-              animate={particleControls}
-            >
-              {particles.map((particle) => (
-                <motion.div
-                  key={particle.id}
-                  className="absolute w-3 h-3 rounded-full bg-white"
-                  style={{
-                    width: 2 + Math.random() * 4,
-                    height: 2 + Math.random() * 4,
-                  }}
-                  initial={{ 
-                    x: 0, 
-                    y: 0, 
-                    scale: 0,
-                    opacity: 0,
-                    rotate: 0 
-                  }}
-                  animate={{ 
-                    x: particle.x, 
-                    y: particle.y, 
-                    scale: particle.scale,
-                    opacity: [0, particle.opacity, 0],
-                    rotate: particle.rotation 
-                  }}
-                  transition={{ 
-                    duration: particle.duration, 
-                    ease: "easeOut",
-                    delay: particle.delay,
-                    repeat: Infinity,
-                    repeatType: "loop"
-                  }}
-                />
-              ))}
-            </motion.div>
+            {/* Particle effect around flower - only render on client */}
+            {isMounted && (
+              <motion.div
+                className="absolute w-full h-full"
+                initial={{ opacity: 0 }}
+                animate={particleControls}
+              >
+                {particles.map((particle) => (
+                  <motion.div
+                    key={particle.id}
+                    className="absolute rounded-full bg-white"
+                    style={{
+                      width: particle.size,
+                      height: particle.size,
+                      left: '50%',
+                      top: '50%',
+                    }}
+                    initial={{ 
+                      x: -particle.size / 2, 
+                      y: -particle.size / 2, 
+                      scale: 0,
+                      opacity: 0,
+                      rotate: 0 
+                    }}
+                    animate={{ 
+                      x: particle.x - particle.size / 2, 
+                      y: particle.y - particle.size / 2, 
+                      scale: particle.scale,
+                      opacity: [0, particle.opacity, 0],
+                      rotate: particle.rotation 
+                    }}
+                    transition={{ 
+                      duration: particle.duration, 
+                      ease: "easeOut",
+                      delay: particle.delay,
+                      repeat: Infinity,
+                      repeatType: "loop"
+                    }}
+                  />
+                ))}
+              </motion.div>
+            )}
           </motion.div>
           
           {/* Sphere that emerges from flower */}
@@ -401,38 +448,38 @@ export default function LoadingAnimation() {
               background: "linear-gradient(135deg, rgba(188,212,255,0.4) 0%, rgba(222,187,255,0.3) 50%, rgba(252,187,227,0.2) 100%)",
             }}
           >
-            {/* Floating light particles */}
-            {Array.from({ length: 12 }).map((_, i) => (
+            {/* Floating light particles - only render on client */}
+            {isMounted && floatingParticles.map((particle) => (
               <motion.div 
-                key={i}
+                key={particle.id}
                 className="absolute rounded-full bg-white/40"
                 style={{
-                  width: 10 + Math.random() * 40,
-                  height: 10 + Math.random() * 40,
+                  width: particle.size,
+                  height: particle.size,
                   filter: "blur(8px)"
                 }}
                 initial={{
-                  x: `${Math.random() * 100}%`,
-                  y: `${Math.random() * 100}%`,
+                  x: `${particle.initialX}%`,
+                  y: `${particle.initialY}%`,
                   opacity: 0,
                 }}
                 animate={{
                   x: [
-                    `${Math.random() * 100}%`, 
-                    `${Math.random() * 100}%`, 
-                    `${Math.random() * 100}%`
+                    `${particle.initialX}%`, 
+                    `${particle.midX}%`, 
+                    `${particle.endX}%`
                   ],
                   y: [
-                    `${Math.random() * 100}%`, 
-                    `${Math.random() * 100}%`, 
-                    `${Math.random() * 100}%`
+                    `${particle.initialY}%`, 
+                    `${particle.midY}%`, 
+                    `${particle.endY}%`
                   ],
                   opacity: [0, 0.4, 0],
                   scale: [0.8, 1.2, 0.8]
                 }}
                 transition={{
-                  duration: 8 + Math.random() * 7,
-                  delay: Math.random() * 2,
+                  duration: particle.duration,
+                  delay: particle.delay,
                   ease: "easeInOut",
                   times: [0, 0.5, 1]
                 }}
