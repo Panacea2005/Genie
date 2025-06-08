@@ -451,7 +451,9 @@ export default function TrackerTab() {
                 )
               })}
             </div>
-          </motion.div>          {/* Pie Chart - Enhanced Design */}
+          </motion.div>          
+          
+          {/* Pie Chart - Enhanced Design */}
           <motion.div 
             className="bg-white/30 backdrop-blur-sm rounded-3xl border border-white/40 p-6"
             initial={{ opacity: 0, y: 20 }}
