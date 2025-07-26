@@ -1,5 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAuth } from '@/app/contexts/AuthContext'
+import { 
+  EmotionService, 
+  EmotionType, 
+  EmotionEntry,
+  CreateEmotionEntry 
+} from '@/lib/services/emotionService'
 import {
   Flower2,
   Sun,
@@ -13,102 +20,196 @@ import {
   TrendingUp,
   Calendar,
   PlusCircle,
-  ChevronRight
+  ChevronRight,
+  Loader2,
+  AlertCircle
 } from 'lucide-react'
 
-interface Emotion {
-  id: string
-  name: string
-  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>
-  color: string
-  description: string
+// Icon mapping for emotion types
+const iconMap: { [key: string]: React.ComponentType<React.SVGProps<SVGSVGElement>> } = {
+  'Flower2': Flower2,
+  'Sun': Sun,
+  'CloudRain': CloudRain,
+  'Zap': Zap,
+  'Waves': Waves,
+  'Moon': Moon,
+  'Star': Star,
+  'Heart': Heart
 }
 
 export default function EmotionsTab() {
+  const { user } = useAuth()
+  
+  // State management
+  const [emotionTypes, setEmotionTypes] = useState<EmotionType[]>([])
+  const [recentEmotions, setRecentEmotions] = useState<EmotionEntry[]>([])
   const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null)
   const [intensity, setIntensity] = useState(5)
   const [note, setNote] = useState('')
-  const [recentEmotions, setRecentEmotions] = useState<any[]>([
-    { emotion: 'Calm', time: '2 hours ago', intensity: 7 },
-    { emotion: 'Happy', time: '5 hours ago', intensity: 8 },
-    { emotion: 'Anxious', time: 'Yesterday', intensity: 4 }
-  ])
+  
+  // Loading and error states
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  
+  // Statistics state
+  const [todayStats, setTodayStats] = useState({
+    entries: 0,
+    avgIntensity: 0,
+    comparisonText: 'Loading...'
+  })
+  
+  // Weekly insights state
+  const [weeklyInsights, setWeeklyInsights] = useState({
+    thisWeekEntries: 0,
+    lastWeekEntries: 0,
+    thisWeekAvgIntensity: 0,
+    lastWeekAvgIntensity: 0,
+    weeklyComparison: 'Loading...',
+    weeklyInsight: 'Loading weekly insights...'
+  })
 
-  const emotions: Emotion[] = [
-    {
-      id: 'calm',
-      name: 'Calm',
-      icon: Flower2,
-      color: '#10b981', // emerald-500
-      description: 'Peaceful and relaxed'
-    },
-    {
-      id: 'happy',
-      name: 'Happy',
-      icon: Sun,
-      color: '#f59e0b', // amber-500
-      description: 'Joyful and content'
-    },
-    {
-      id: 'sad',
-      name: 'Sad',
-      icon: CloudRain,
-      color: '#3b82f6', // blue-500
-      description: 'Down or melancholic'
-    },
-    {
-      id: 'anxious',
-      name: 'Anxious',
-      icon: Zap,
-      color: '#a855f7', // purple-500
-      description: 'Worried or nervous'
-    },
-    {
-      id: 'peaceful',
-      name: 'Peaceful',
-      icon: Waves,
-      color: '#06b6d4', // cyan-500
-      description: 'Serene and tranquil'
-    },
-    {
-      id: 'tired',
-      name: 'Tired',
-      icon: Moon,
-      color: '#6b7280', // gray-500
-      description: 'Low energy or exhausted'
+  // Load emotion types and recent entries on component mount
+  useEffect(() => {
+    if (!user?.id) return
+
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        setError(null)
+
+        // Load emotion types and recent entries in parallel
+        const [typesResult, entriesResult, insightsResult, weeklyInsightsResult] = await Promise.all([
+          EmotionService.getEmotionTypes(),
+          EmotionService.getEmotionEntries(user.id, 5),
+          EmotionService.getEmotionInsights(user.id),
+          EmotionService.getWeeklyEmotionInsights(user.id)
+        ])
+
+        if (typesResult.error) {
+          throw new Error('Failed to load emotion types')
+        }
+        if (entriesResult.error) {
+          throw new Error('Failed to load recent emotions')
+        }
+
+        setEmotionTypes(typesResult.data || [])
+        setRecentEmotions(entriesResult.data || [])
+        
+        // Update today's stats
+        setTodayStats({
+          entries: insightsResult.todayEntries,
+          avgIntensity: insightsResult.avgIntensity,
+          comparisonText: insightsResult.comparisonText
+        })
+        
+        // Update weekly insights
+        setWeeklyInsights({
+          thisWeekEntries: weeklyInsightsResult.thisWeekEntries,
+          lastWeekEntries: weeklyInsightsResult.lastWeekEntries,
+          thisWeekAvgIntensity: weeklyInsightsResult.thisWeekAvgIntensity,
+          lastWeekAvgIntensity: weeklyInsightsResult.lastWeekAvgIntensity,
+          weeklyComparison: weeklyInsightsResult.weeklyComparison,
+          weeklyInsight: weeklyInsightsResult.weeklyInsight
+        })
+
+      } catch (err: any) {
+        console.error('Error loading emotion data:', err)
+        setError(err.message || 'Failed to load emotion data')
+      } finally {
+        setLoading(false)
+      }
     }
-  ]
+
+    loadData()
+  }, [user?.id])
 
   const handleEmotionSelect = (emotionId: string) => {
     setSelectedEmotion(emotionId)
   }
 
-  const handleSubmit = () => {
-    if (selectedEmotion) {
-      const emotion = emotions.find(e => e.id === selectedEmotion)
-      setRecentEmotions([
-        {
-          emotion: emotion?.name,
-          time: 'Just now',
-          intensity,
-          note
-        },
-        ...recentEmotions.slice(0, 2)
-      ])
+  const handleSubmit = async () => {
+    if (!selectedEmotion || !user?.id || submitting) return
+
+    try {
+      setSubmitting(true)
+      setError(null)
+
+      const entryData: CreateEmotionEntry = {
+        emotion_type_id: selectedEmotion,
+        intensity,
+        notes: note.trim() || null
+      }
+
+      const { data: newEntry, error: submitError } = await EmotionService.createEmotionEntry(user.id, entryData)
+      
+      if (submitError) {
+        throw new Error('Failed to save emotion entry')
+      }
+
+      if (newEntry) {
+        // Add new entry to the beginning of recent emotions
+        setRecentEmotions([newEntry, ...recentEmotions.slice(0, 4)])
+        
+        // Update today's stats
+        setTodayStats(prev => ({
+          ...prev,
+          entries: prev.entries + 1,
+          avgIntensity: prev.entries === 0 ? intensity : 
+            ((prev.avgIntensity * prev.entries) + intensity) / (prev.entries + 1)
+        }))
+      }
       
       // Reset form
       setSelectedEmotion(null)
       setIntensity(5)
       setNote('')
+      
+    } catch (err: any) {
+      console.error('Error submitting emotion:', err)
+      setError(err.message || 'Failed to save emotion')
+    } finally {
+      setSubmitting(false)
     }
+  }
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center py-12">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-600 font-light">Loading your emotion data...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+          <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
+          <h3 className="text-red-800 font-medium mb-2">Unable to load emotions</h3>
+          <p className="text-red-600 text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="max-w-6xl mx-auto">
       {/* Emotion Grid - Minimal cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-12">
-        {emotions.map((emotion, index) => {
-          const Icon = emotion.icon
+        {emotionTypes.map((emotion, index) => {
+          const Icon = iconMap[emotion.icon_name] || Heart
           const isSelected = selectedEmotion === emotion.id
           
           return (
@@ -186,7 +287,7 @@ export default function EmotionsTab() {
                     onChange={(e) => setIntensity(parseInt(e.target.value))}
                     className="w-full h-1 bg-gray-200 rounded-full appearance-none cursor-pointer slider"
                     style={{
-                      background: `linear-gradient(to right, ${emotions.find(e => e.id === selectedEmotion)?.color} 0%, ${emotions.find(e => e.id === selectedEmotion)?.color} ${intensity * 10}%, #e5e7eb ${intensity * 10}%, #e5e7eb 100%)`
+                      background: `linear-gradient(to right, ${emotionTypes.find(e => e.id === selectedEmotion)?.color} 0%, ${emotionTypes.find(e => e.id === selectedEmotion)?.color} ${intensity * 10}%, #e5e7eb ${intensity * 10}%, #e5e7eb 100%)`
                     }}
                   />
                   <div className="flex justify-between text-xs text-gray-400 mt-2 font-light">
@@ -211,14 +312,28 @@ export default function EmotionsTab() {
                 />
               </div>
 
+              {/* Error Message */}
+              {error && (
+                <motion.div 
+                  className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                >
+                  <AlertCircle className="w-5 h-5 text-red-500 mx-auto mb-2" />
+                  <p className="text-red-600 text-sm">{error}</p>
+                </motion.div>
+              )}
+
               {/* Submit Button - Minimal style */}
               <motion.button
                 onClick={handleSubmit}
-                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-light hover:bg-gray-800 transition-all"
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.99 }}
+                disabled={submitting}
+                className="w-full py-4 bg-gray-900 text-white rounded-2xl font-light hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                whileHover={{ scale: submitting ? 1 : 1.01 }}
+                whileTap={{ scale: submitting ? 1 : 0.99 }}
               >
-                Save this moment
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {submitting ? 'Saving...' : 'Save this moment'}
               </motion.button>
             </div>
           </motion.div>
@@ -247,9 +362,14 @@ export default function EmotionsTab() {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
               >
-                3 entries
+                {todayStats.entries} {todayStats.entries === 1 ? 'entry' : 'entries'}
               </motion.div>
-              <div className="text-sm text-gray-500 font-light">Average intensity: 6.3</div>
+              <div className="text-sm text-gray-500 font-light">
+                {todayStats.entries > 0 
+                  ? `Average intensity: ${todayStats.avgIntensity.toFixed(1)}`
+                  : 'No entries today yet'
+                }
+              </div>
             </div>
             
             <div className="pt-5 border-t border-gray-200/30">
@@ -260,7 +380,7 @@ export default function EmotionsTab() {
                 transition={{ delay: 0.4 }}
               >
                 <TrendingUp className="w-4 h-4 text-emerald-500" />
-                <span className="text-gray-600 font-light">Feeling 20% better than yesterday</span>
+                <span className="text-gray-600 font-light">{todayStats.comparisonText}</span>
               </motion.div>
             </div>
           </div>
@@ -282,8 +402,8 @@ export default function EmotionsTab() {
           
           <div className="space-y-3">
             {recentEmotions.map((entry, index) => {
-              const emotion = emotions.find(e => e.name === entry.emotion)
-              const Icon = emotion?.icon || Heart
+              const emotion = emotionTypes.find(e => e.id === entry.emotion_type_id)
+              const Icon = (emotion ? iconMap[emotion.icon_name] : null) || Heart
               
               return (
                 <motion.div 
@@ -300,8 +420,8 @@ export default function EmotionsTab() {
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-800">{entry.emotion}</span>
-                      <span className="text-xs text-gray-500 font-light">• {entry.time}</span>
+                      <span className="font-medium text-gray-800">{emotion?.name || 'Unknown'}</span>
+                      <span className="text-xs text-gray-500 font-light">• {EmotionService.formatRelativeTime(entry.created_at)}</span>
                     </div>
                     <div className="flex items-center gap-4 mt-2">
                       <div className="flex items-center gap-2">
@@ -320,8 +440,8 @@ export default function EmotionsTab() {
                         <span className="text-xs text-gray-500 font-light">{entry.intensity}</span>
                       </div>
                     </div>
-                    {entry.note && (
-                      <p className="text-sm text-gray-600 mt-2 font-light">{entry.note}</p>
+                    {entry.notes && (
+                      <p className="text-sm text-gray-600 mt-2 font-light">{entry.notes}</p>
                     )}
                   </div>
                 </motion.div>
@@ -354,9 +474,13 @@ export default function EmotionsTab() {
           <div>
             <h4 className="font-medium text-gray-800 mb-1">Weekly Insight</h4>
             <p className="text-sm text-gray-600 font-light leading-relaxed">
-              You've been feeling more calm this week compared to last week. 
-              Your morning entries tend to be more positive. Keep up the great work!
+              {weeklyInsights.weeklyInsight}
             </p>
+            {weeklyInsights.thisWeekEntries > 0 && (
+              <div className="mt-3 text-xs text-gray-500 font-light">
+                {weeklyInsights.thisWeekEntries} entries this week • {weeklyInsights.weeklyComparison}
+              </div>
+            )}
           </div>
         </div>
       </motion.div>

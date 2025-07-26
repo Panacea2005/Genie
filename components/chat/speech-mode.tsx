@@ -30,6 +30,11 @@ interface SpeechMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
+  emotion?: {
+    primary_emotion: string;
+    confidence: number;
+    mental_health_category: string;
+  };
 }
 
 interface SpeechModeProps {
@@ -199,7 +204,7 @@ export default function SpeechMode({
     }
   };
 
-  // Process audio with Groq
+  // Process audio with Groq and emotion analysis
   const processAudio = async (base64Audio: string) => {
     try {
       const groq = new Groq({
@@ -215,57 +220,135 @@ export default function SpeechMode({
       const blob = new Blob([bytes], { type: "audio/webm" });
       const file = new File([blob], "recording.webm", { type: "audio/webm" });
 
-      const response = await groq.audio.transcriptions.create({
-        model: "whisper-large-v3-turbo",
-        file: file,
-        language: "en",
-      });
+      // Process transcription and emotion analysis in parallel
+      const [transcriptionResponse, emotionResponse] = await Promise.allSettled([
+        // Transcription
+        groq.audio.transcriptions.create({
+          model: "whisper-large-v3-turbo",
+          file: file,
+          language: "en",
+        }),
+        // Emotion analysis
+        analyzeEmotion(base64Audio)
+      ]);
 
-      const transcribedText = response.text;
+      // Handle transcription result
+      let transcribedText = "";
+      if (transcriptionResponse.status === "fulfilled") {
+        transcribedText = transcriptionResponse.value.text;
+      } else {
+        console.error("Transcription failed:", transcriptionResponse.reason);
+      }
+
+             // Handle emotion analysis result
+       let emotionData: {
+         primary_emotion: string;
+         confidence: number;
+         mental_health_category: string;
+       } | undefined = undefined;
+       if (emotionResponse.status === "fulfilled" && emotionResponse.value) {
+         emotionData = {
+           primary_emotion: emotionResponse.value.primary_emotion,
+           confidence: emotionResponse.value.confidence,
+           mental_health_category: emotionResponse.value.mental_health_category
+         };
+         console.log("Emotion detected:", emotionData);
+       } else {
+         console.warn("Emotion analysis failed or unavailable");
+       }
       
       if (transcribedText.trim()) {
-        // Add user message
+        // Add user message with emotion data
         const userMessage: SpeechMessage = {
           role: "user",
           content: transcribedText,
           timestamp: new Date(),
+          emotion: emotionData,
         };
         setMessages((prev) => [...prev, userMessage]);
 
-        // Get AI response
-        await getAIResponse(transcribedText);
+        // Get AI response with emotion context
+        await getAIResponse(transcribedText, emotionData);
       }
     } catch (error) {
-      console.error("Error transcribing audio:", error);
+      console.error("Error processing audio:", error);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Get AI response
-  const getAIResponse = async (userInput: string) => {
+  // Analyze emotion from audio
+  const analyzeEmotion = async (base64Audio: string) => {
     try {
+      const response = await fetch("http://127.0.0.1:8000/emotion/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          audio_data: base64Audio,
+          audio_format: "webm",
+          session_id: "speech-mode",
+          top_emotions: 3,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Emotion analysis failed: ${response.status}`);
+      }
+
+      const emotionResult = await response.json();
+      
+      if (emotionResult.error) {
+        console.error("Emotion analysis error:", emotionResult.error);
+        return null;
+      }
+
+      return emotionResult;
+    } catch (error) {
+      console.error("Failed to analyze emotion:", error);
+      return null;
+    }
+  };
+
+  // Get AI response with emotion context
+  const getAIResponse = async (userInput: string, emotionData?: {
+    primary_emotion: string;
+    confidence: number;
+    mental_health_category: string;
+  }) => {
+    try {
+      // Prepare messages with emotion context if available
+      const messagesToSend = [
+        ...messages.map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        })),
+      ];
+
+             // Include emotion context in the user message if available
+       let enhancedUserInput = userInput;
+       if (emotionData && emotionData.primary_emotion) {
+         enhancedUserInput = `${userInput}\n\n[DETECTED EMOTION: ${emotionData.primary_emotion} (${(emotionData.confidence * 100).toFixed(1)}% confidence, category: ${emotionData.mental_health_category})]`;
+       }
+
+       messagesToSend.push({ role: "user", content: enhancedUserInput });
+
       const response = await chatService.sendMessage(
-        [
-          ...messages.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-          })),
-          { role: "user", content: userInput },
-        ],
+        messagesToSend,
         selectedModel
       );
 
       const assistantMessage: SpeechMessage = {
         role: "assistant",
-        content: response,
+        content: response.response,
         timestamp: new Date(),
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
       
       // Speak the response
-      speakText(response);
+      speakText(response.response);
     } catch (error) {
       console.error("Error getting AI response:", error);
     }
@@ -293,9 +376,11 @@ export default function SpeechMode({
     
     simulateAudioLevels();
     
-    const cleanText = tts.prepareTextForSpeech(text);
+    // Clean markdown formatting before TTS processing
+    const cleanedText = cleanMarkdownText(text);
+    const finalText = tts.prepareTextForSpeech(cleanedText);
     
-    tts.speak(cleanText, {
+    tts.speak(finalText, {
       voice: selectedVoice ?? undefined,
       rate: 0.9,
       onEnd: () => {
@@ -321,13 +406,36 @@ export default function SpeechMode({
       .padStart(2, "0")}`;
   };
 
+  // Clean markdown formatting from text for display
+  const cleanMarkdownText = (text: string): string => {
+    return text
+      // Remove bold formatting
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/__(.*?)__/g, '$1')
+      // Remove italic formatting
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/_(.*?)_/g, '$1')
+      // Remove code formatting
+      .replace(/`(.*?)`/g, '$1')
+      // Remove headers
+      .replace(/#{1,6}\s*(.*)/g, '$1')
+      // Remove strikethrough
+      .replace(/~~(.*?)~~/g, '$1')
+      // Remove links but keep text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+      // Remove line breaks and extra spaces
+      .replace(/\n+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   // Copy transcript
   const copyTranscript = () => {
     const transcript = messages
       .map(
         (msg) =>
           `${msg.role === "user" ? "You" : "Genie"} (${msg.timestamp.toLocaleTimeString()}): ${
-            msg.content
+            cleanMarkdownText(msg.content)
           }`
       )
       .join("\n\n");
@@ -344,8 +452,8 @@ export default function SpeechMode({
       .map(
         (msg) =>
           `${msg.role === "user" ? "You" : "Genie"} (${msg.timestamp.toLocaleTimeString()}): ${
-            msg.content
-          }`
+            cleanMarkdownText(msg.content)
+          }${msg.emotion ? `\n[Detected emotion: ${msg.emotion.primary_emotion} (${(msg.emotion.confidence * 100).toFixed(1)}%)]` : ''}`
       )
       .join("\n\n");
 
@@ -822,7 +930,12 @@ export default function SpeechMode({
                               {msg.timestamp.toLocaleTimeString()}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-800 leading-relaxed">{msg.content}</p>
+                          <p className="text-sm text-gray-800 leading-relaxed">{cleanMarkdownText(msg.content)}</p>
+                          {msg.emotion && (
+                            <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">
+                              Detected emotion: {msg.emotion.primary_emotion} ({(msg.emotion.confidence * 100).toFixed(1)}%)
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     ))

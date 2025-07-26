@@ -28,8 +28,8 @@ const Navbar = dynamic(() => import("@/components/navbar"), {
   ssr: false,
 });
 
-// Import the gradient sphere component
-const GradientSphere = dynamic(() => import("@/components/gradient-sphere"), {
+// Import the zen garden component
+const ZenGarden = dynamic(() => import("@/components/zen-garden"), {
   ssr: false,
 });
 
@@ -149,8 +149,8 @@ export default function MeditationPage() {
     setElapsedTime(0);
   };
 
-  const speakText = useCallback((text: string, index: number) => {
-    if ('speechSynthesis' in window && !isPaused) {
+  const speakText = useCallback((text: string, index: number, forceSpeak: boolean = false) => {
+    if ('speechSynthesis' in window && (!isPaused || forceSpeak)) {
       // Cancel any previous speech
       window.speechSynthesis.cancel();
       
@@ -275,9 +275,9 @@ export default function MeditationPage() {
         setProgress((elapsed / totalDuration) * 100);
       }, 100);
       
-      // Resume speech from current position
+      // Resume speech from current position - force speak to ensure it starts
       speechTimeoutRef.current = setTimeout(() => {
-        speakText(selectedTopic.content[resumeIndexRef.current], resumeIndexRef.current);
+        speakText(selectedTopic.content[resumeIndexRef.current], resumeIndexRef.current, true);
       }, 500);
     }
   };
@@ -333,7 +333,8 @@ export default function MeditationPage() {
       }
       const nextIndex = Math.min(currentTextIndex + 1, selectedTopic.content.length - 1);
       resumeIndexRef.current = nextIndex;
-      speakText(selectedTopic.content[nextIndex], nextIndex);
+      // Force speak even if paused to allow skipping while paused
+      speakText(selectedTopic.content[nextIndex], nextIndex, !isPaused);
     }
   };
 
@@ -347,7 +348,8 @@ export default function MeditationPage() {
       }
       const prevIndex = Math.max(currentTextIndex - 1, 0);
       resumeIndexRef.current = prevIndex;
-      speakText(selectedTopic.content[prevIndex], prevIndex);
+      // Force speak even if paused to allow skipping while paused
+      speakText(selectedTopic.content[prevIndex], prevIndex, !isPaused);
     }
   };
 
@@ -467,19 +469,25 @@ export default function MeditationPage() {
 
         {/* Main content area */}
         <div className="flex-1 relative flex items-center justify-center">
-          {/* Background gradient sphere - with smooth transition */}
+          {/* Background zen garden - with smooth transition */}
           <AnimatePresence mode="wait">
             <motion.div 
               key={selectedTopic.id}
-              className="absolute inset-0 flex items-center justify-center"
-              initial={{ opacity: 0, scale: 0.8, filter: "blur(20px)" }}
-              animate={{ opacity: 0.6, scale: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, scale: 0.8, filter: "blur(20px)" }}
-              transition={{ duration: 1.2 }}
+              className="absolute inset-0"
+              initial={{ opacity: 0, filter: "blur(20px)" }}
+              animate={{ opacity: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, filter: "blur(20px)" }}
+              transition={{ duration: 1.5 }}
             >
-              <div className="transform scale-150">
-                <GradientSphere colors={currentColors} />
-              </div>
+              <ZenGarden 
+                colors={currentColors} 
+                category={selectedTopic.category}
+                intensity={
+                  selectedTopic.category === 'sleep' ? 'calm' :
+                  selectedTopic.category === 'anxiety' || selectedTopic.category === 'healing' ? 'deep' :
+                  'serene'
+                }
+              />
             </motion.div>
           </AnimatePresence>
 

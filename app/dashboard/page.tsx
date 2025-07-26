@@ -2,17 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/app/contexts/AuthContext"
 import {
   Heart,
-  Brain,
   Shield,
   BarChart2,
-  BookOpen,
   LifeBuoy,
   SmilePlus,
-  ChevronRight,
   ChevronLeft,
   Menu,
   X,
@@ -29,7 +26,7 @@ import ResourcesTab from "@/components/dashboard/resources-tab"
 import TrackerTab from "@/components/dashboard/tracker-tab"
 import SafetyTab from "@/components/dashboard/safety-tab"
 
-type TabType = 'emotions' | 'wellness' | 'resources' | 'tracker' | 'safety'
+type TabType = 'emotions' | 'wellness' | 'resources' | 'tracker' | 'safety' | 'chat-insights'
 
 interface SidebarItem {
   id: TabType
@@ -42,6 +39,7 @@ interface SidebarItem {
 export default function DashboardPage() {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   // State management
   const [mounted, setMounted] = useState(false)
@@ -85,7 +83,7 @@ export default function DashboardPage() {
       description: 'Your personal wellness strategy',
       icon: Shield,
       colorTheme: ['#BBF7D0', '#D1FAE5', '#86EFAC']
-    }
+    },
   ]
 
   // Redirect if not authenticated
@@ -94,6 +92,14 @@ export default function DashboardPage() {
       router.push("/auth")
     }
   }, [user, loading, router])
+
+  // Handle URL parameters for tab switching
+  useEffect(() => {
+    const tab = searchParams.get('tab') as TabType
+    if (tab && sidebarItems.some(item => item.id === tab)) {
+      setActiveTab(tab)
+    }
+  }, [searchParams])
 
   // Initialize component
   useEffect(() => {
@@ -118,6 +124,11 @@ export default function DashboardPage() {
   const handleTabChange = (tabId: TabType) => {
     setActiveTab(tabId)
     setMobileMenuOpen(false)
+    
+    // Update URL without page reload
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tabId)
+    window.history.replaceState({}, '', url.toString())
   }
 
   const currentItem = sidebarItems.find(item => item.id === activeTab)

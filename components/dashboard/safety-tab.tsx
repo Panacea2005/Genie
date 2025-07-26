@@ -1,5 +1,15 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useAuth } from '@/app/contexts/AuthContext'
+import { 
+  SafetyPlanService, 
+  SafetyPlanWithItems,
+  SafetyPlanSection,
+  SafetyPlanItem,
+  SafetyPlanContact,
+  CreateSafetyPlanItem,
+  CreateSafetyPlanContact 
+} from '@/lib/services/safetyPlanService'
 import {
   Shield,
   AlertCircle,
@@ -14,162 +24,161 @@ import {
   CheckCircle,
   FileText,
   Download,
-  Circle
+  Circle,
+  Loader2
 } from 'lucide-react'
 
-interface SafetySection {
-  id: string
-  title: string
-  description: string
-  icon: React.ComponentType<{
-    className?: string;
-    style?: React.CSSProperties;
-  }>;
-  items: string[]
-  color: string
-}
-
-interface Contact {
-  id: string
-  name: string
-  relationship: string
-  phone: string
-  available: string
+// Icon mapping for safety plan sections
+const iconMap: { [key: string]: React.ComponentType<React.SVGProps<SVGSVGElement>> } = {
+  'AlertCircle': AlertCircle,
+  'Heart': Heart,
+  'MapPin': MapPin,
+  'Shield': Shield
 }
 
 export default function SafetyTab() {
+  const { user } = useAuth()
+  
+  // State management
+  const [safetyPlan, setSafetyPlan] = useState<SafetyPlanWithItems | null>(null)
   const [editingSection, setEditingSection] = useState<string | null>(null)
   const [newItem, setNewItem] = useState('')
   const [showAddContact, setShowAddContact] = useState(false)
-  const [newContact, setNewContact] = useState({
+  const [newContact, setNewContact] = useState<CreateSafetyPlanContact>({
     name: '',
     relationship: '',
     phone: '',
-    available: ''
+    available_hours: ''
   })
-  const [contacts, setContacts] = useState<Contact[]>([
-    {
-      id: '1',
-      name: 'Dr. Sarah Johnson',
-      relationship: 'Therapist',
-      phone: '(555) 123-4567',
-      available: 'Mon-Fri 9AM-5PM'
-    },
-    {
-      id: '2',
-      name: 'Emma',
-      relationship: 'Best Friend',
-      phone: '(555) 987-6543',
-      available: 'Anytime'
-    }
-  ])
+  
+  // Loading and error states
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const safetySections: SafetySection[] = [
-    {
-      id: 'warning-signs',
-      title: 'Warning Signs',
-      description: 'Early indicators that I need to use my safety plan',
-      icon: AlertCircle,
-      items: [
-        'Feeling overwhelmed or hopeless',
-        'Isolating from friends and family',
-        'Changes in sleep patterns',
-        'Difficulty concentrating'
-      ],
-      color: '#ef4444' // red-500
-    },
-    {
-      id: 'coping-strategies',
-      title: 'Coping Strategies',
-      description: 'Things I can do on my own to feel better',
-      icon: Heart,
-      items: [
-        'Take a walk in nature',
-        'Practice deep breathing exercises',
-        'Listen to calming music',
-        'Write in my journal',
-        'Call a friend'
-      ],
-      color: '#a855f7' // purple-500
-    },
-    {
-      id: 'safe-places',
-      title: 'Safe Places',
-      description: 'Locations where I feel secure and calm',
-      icon: MapPin,
-      items: [
-        'Local park near home',
-        'Coffee shop on Main Street',
-        'Public library',
-        'Friend\'s house'
-      ],
-      color: '#10b981' // emerald-500
-    },
-    {
-      id: 'reasons-to-live',
-      title: 'Reasons to Live',
-      description: 'Things that give my life meaning and purpose',
-      icon: Shield,
-      items: [
-        'My family and friends',
-        'Future goals and dreams',
-        'My pet',
-        'Helping others',
-        'Beautiful sunsets'
-      ],
-      color: '#3b82f6' // blue-500
-    }
-  ]
+  // Load safety plan data on component mount
+  useEffect(() => {
+    if (!user?.id) return
 
-  const handleAddItem = (sectionId: string) => {
-    if (!newItem.trim()) return
-    
-    // In a real app, this would update the database
-    console.log('Adding item:', newItem, 'to section:', sectionId)
-    setNewItem('')
-  }
+    const loadSafetyPlan = async () => {
+      try {
+        setLoading(true)
+        setError(null)
 
-  const handleAddContact = () => {
-    if (newContact.name && newContact.phone) {
-      const contact: Contact = {
-        id: Date.now().toString(),
-        ...newContact
+        const { data, error: loadError } = await SafetyPlanService.getCompleteSafetyPlan(user.id)
+        
+        if (loadError) {
+          throw new Error('Failed to load safety plan')
+        }
+
+        setSafetyPlan(data)
+      } catch (err: any) {
+        console.error('Error loading safety plan:', err)
+        setError(err.message || 'Failed to load safety plan')
+      } finally {
+        setLoading(false)
       }
-      setContacts([...contacts, contact])
-      setNewContact({ name: '', relationship: '', phone: '', available: '' })
-      setShowAddContact(false)
+    }
+
+    loadSafetyPlan()
+  }, [user?.id])
+
+  const handleAddItem = async (sectionId: string) => {
+    if (!newItem.trim() || !user?.id || submitting) return
+    
+    try {
+      setSubmitting(true)
+      setError(null)
+
+      const itemData: CreateSafetyPlanItem = {
+        section_id: sectionId,
+        content: newItem.trim()
+      }
+
+      const { data: newItemData, error: createError } = await SafetyPlanService.createSafetyPlanItem(user.id, itemData)
+      
+      if (createError) {
+        throw new Error('Failed to add item')
+      }
+
+      if (newItemData && safetyPlan) {
+        // Update local state
+        const updatedItems = { ...safetyPlan.items }
+        if (!updatedItems[sectionId]) {
+          updatedItems[sectionId] = []
+        }
+        updatedItems[sectionId] = [...updatedItems[sectionId], newItemData]
+        
+        setSafetyPlan({
+          ...safetyPlan,
+          items: updatedItems
+        })
+      }
+      
+      setNewItem('')
+      setEditingSection(null)
+    } catch (err: any) {
+      console.error('Error adding item:', err)
+      setError(err.message || 'Failed to add item')
+    } finally {
+      setSubmitting(false)
     }
   }
 
-  const handleExportPDF = () => {
-    // Simple PDF export implementation
-    const content = `
-PERSONAL SAFETY PLAN
-Generated on: ${new Date().toLocaleDateString()}
+  const handleAddContact = async () => {
+    if (!newContact.name || !newContact.phone || !user?.id || submitting) return
+    
+    try {
+      setSubmitting(true)
+      setError(null)
 
-EMERGENCY RESOURCES:
-${emergencyResources.map(r => `${r.name}: ${r.number} (${r.available})`).join('\n')}
+      const { data: newContactData, error: createError } = await SafetyPlanService.createSafetyPlanContact(user.id, newContact)
+      
+      if (createError) {
+        throw new Error('Failed to add contact')
+      }
 
-${safetySections.map(section => `
-${section.title.toUpperCase()}
-${section.description}
-${section.items.map((item, i) => `${i + 1}. ${item}`).join('\n')}
-`).join('\n')}
+      if (newContactData && safetyPlan) {
+        setSafetyPlan({
+          ...safetyPlan,
+          contacts: [...safetyPlan.contacts, newContactData]
+        })
+      }
+      
+      setNewContact({ name: '', relationship: '', phone: '', available_hours: '' })
+      setShowAddContact(false)
+    } catch (err: any) {
+      console.error('Error adding contact:', err)
+      setError(err.message || 'Failed to add contact')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
-SUPPORT CONTACTS:
-${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`).join('\n')}
-    `.trim()
+  const handleExportPDF = async () => {
+    if (!user?.id) return
+    
+    try {
+      const { data: content, error } = await SafetyPlanService.generateSafetyPlanExport(user.id)
+      
+      if (error || !content) {
+        throw new Error('Failed to generate safety plan export')
+      }
 
-    // Create blob and download
-    const blob = new Blob([content], { type: 'text/plain' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `safety-plan-${new Date().toISOString().split('T')[0]}.txt`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
+      // Create blob and download
+      const blob = new Blob([content], { type: 'text/plain' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `safety-plan-${new Date().toISOString().split('T')[0]}.txt`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      console.error('Error exporting safety plan:', err)
+      setError('Failed to export safety plan')
+    }
   }
 
   const emergencyResources = [
@@ -177,6 +186,50 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
     { name: 'Crisis Text Line', number: 'Text HOME to 741741', available: '24/7' },
     { name: 'Emergency Services', number: '911', available: '24/7' }
   ]
+
+  // Show loading state
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto flex items-center justify-center py-12">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-4 text-gray-400" />
+          <p className="text-gray-600 font-light">Loading your safety plan...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+          <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-3" />
+          <h3 className="text-red-800 font-medium mb-2">Unable to load safety plan</h3>
+          <p className="text-red-600 text-sm">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Show empty state if no safety plan
+  if (!safetyPlan) {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center py-12">
+          <Shield className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-gray-800 font-medium mb-2">No safety plan found</h3>
+          <p className="text-gray-600 text-sm">Unable to load your safety plan data.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -250,8 +303,8 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
 
       {/* Safety Plan Sections - Minimal cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-12">
-        {safetySections.map((section, index) => {
-          const Icon = section.icon
+        {safetyPlan.sections.map((section, index) => {
+          const Icon = iconMap[section.icon_name] || Shield
           const isEditing = editingSection === section.id
           
           return (
@@ -289,7 +342,7 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
                 
                 {/* Items List - Minimal style */}
                 <div className="space-y-2">
-                  {section.items.map((item, itemIndex) => (
+                  {(safetyPlan.items[section.id] || []).map((item, itemIndex) => (
                     <motion.div 
                       key={itemIndex} 
                       className="flex items-center gap-3 p-3 bg-white/30 backdrop-blur-sm rounded-2xl"
@@ -302,7 +355,7 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
                         fill={section.color}
                         style={{ color: section.color }}
                       />
-                      <span className="text-sm text-gray-700 font-light">{item}</span>
+                      <span className="text-sm text-gray-700 font-light">{item.content}</span>
                     </motion.div>
                   ))}
                 </div>
@@ -373,7 +426,7 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {contacts.map((contact, index) => (
+          {safetyPlan.contacts.map((contact, index) => (
             <motion.div 
               key={contact.id} 
               className="bg-white/40 backdrop-blur-sm border border-white/50 rounded-2xl p-4"
@@ -389,7 +442,7 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
                   <Phone className="w-3 h-3 text-gray-400" />
                   <span className="text-gray-700 font-light">{contact.phone}</span>
                 </div>
-                <div className="text-xs text-gray-500 font-light">{contact.available}</div>
+                <div className="text-xs text-gray-500 font-light">{contact.available_hours || 'Anytime'}</div>
               </div>
             </motion.div>
           ))}
@@ -520,7 +573,7 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
                     <label className="block text-xs font-medium text-gray-600 mb-2 ml-1">Relationship</label>
                     <input
                       type="text"
-                      value={newContact.relationship}
+                      value={newContact.relationship || ''}
                       onChange={(e) => setNewContact({ ...newContact, relationship: e.target.value })}
                       className="w-full px-4 py-3 bg-gray-50/50 backdrop-blur-sm border border-gray-200/50 rounded-2xl focus:outline-none focus:border-blue-300 focus:bg-white/50 transition-all font-light placeholder-gray-400"
                       placeholder="Friend, Family, Therapist..."
@@ -542,8 +595,8 @@ ${contacts.map(c => `${c.name} (${c.relationship}): ${c.phone} - ${c.available}`
                     <label className="block text-xs font-medium text-gray-600 mb-2 ml-1">When are they available?</label>
                     <input
                       type="text"
-                      value={newContact.available}
-                      onChange={(e) => setNewContact({ ...newContact, available: e.target.value })}
+                      value={newContact.available_hours || ''}
+                      onChange={(e) => setNewContact({ ...newContact, available_hours: e.target.value })}
                       className="w-full px-4 py-3 bg-gray-50/50 backdrop-blur-sm border border-gray-200/50 rounded-2xl focus:outline-none focus:border-blue-300 focus:bg-white/50 transition-all font-light placeholder-gray-400"
                       placeholder="Anytime, Weekdays, Emergency only..."
                     />

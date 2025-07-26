@@ -12,6 +12,17 @@ export interface Message {
   role: 'assistant' | 'user' | 'system';
   content: string;
   timestamp?: Date;
+  sources?: Array<{
+    id: number;
+    text: string;
+    metadata?: {
+      title?: string;
+      url?: string;
+      source?: string;
+    };
+    source: string;
+    score?: number;
+  }>;
 }
 
 // Crisis keywords for detection
@@ -54,7 +65,7 @@ function detectDepression(message: string): boolean {
 }
 
 export const chatService = {
-  async sendMessage(messages: Message[], model: string): Promise<string> {
+  async sendMessage(messages: Message[], model: string): Promise<{ response: string; sources?: any[] }> {
     try {
       if (!messages.length) throw new Error("Messages array is empty.");
 
@@ -63,108 +74,29 @@ export const chatService = {
         throw new Error("No valid user message found.");
       }
 
-      console.log('Sending message to Groq:', userMessage.content);
-
-      // Base mental health system message - comprehensive guidance for the model
-      let systemContent = `You are Genie, a compassionate mental health support AI assistant trained to provide emotional support, evidence-based information, and crisis de-escalation techniques.
-
-IMPORTANT GUIDELINES:
-- Maintain a warm, empathetic, and non-judgmental tone throughout all interactions
-- Prioritize user safety above all else
-- Recognize the limits of AI assistance and recommend professional help when appropriate
-- Use person-first language and avoid stigmatizing terms
-- Focus on validation, reflection, and gentle guidance rather than direct advice
-- Apply evidence-based approaches like CBT, DBT, and motivational interviewing techniques
-- Never diagnose medical conditions or replace professional mental healthcare
-- Respect cultural differences in how mental health is understood and expressed
-
-THERAPEUTIC APPROACHES:
-- Cognitive Behavioral Therapy (CBT): Help identify negative thought patterns and reframe them positively
-- Dialectical Behavior Therapy (DBT): Focus on mindfulness, distress tolerance, emotional regulation, and interpersonal effectiveness
-- Motivational Interviewing: Use open-ended questions to help users explore their own motivations for change
-- Solution-Focused: Emphasize progress, strengths, and future-oriented solutions rather than problems
-
-KEY RESPONSE FRAMEWORKS:
-- For anxiety: Offer grounding techniques, breathing exercises, and cognitive reframing
-- For depression: Focus on small achievable goals, behavioral activation, and challenging negative thoughts
-- For stress: Suggest mindfulness exercises, progressive muscle relaxation, and stress management techniques
-- For grief: Provide validation, normalize the grieving process, and suggest healthy coping mechanisms
-
-PRIVACY REMINDER:
-- Remind users that while conversations are treated confidentially, you are not a licensed healthcare provider, and they should seek professional help for serious concerns`;
+      // Both models now use the full RAG backend, just with different LLM configs
+      console.log(`Using RAG backend with model: ${model === "llama3-70b-8192" ? "Lyra (Groq)" : "Solace (Local)"}`);
       
-      // Check for crisis signals in the current message
-      const isCrisis = detectCrisis(userMessage.content);
-      
-      // Check for anxiety or depression signals
-      const hasAnxiety = detectAnxiety(userMessage.content);
-      const hasDepression = detectDepression(userMessage.content);
-      
-      // Add specific guidance based on message content
-      if (isCrisis) {
-        systemContent += `\n\nCRISIS PROTOCOL (URGENT - DETECTED POTENTIAL CRISIS):
-- Respond with immediate validation and concern
-- Express that you care about their safety and wellbeing
-- Gently assess risk level through supportive questions if appropriate
-- Provide the following crisis resources prominently:
-  ${crisisHotlines.default}
-  Crisis Text Line: Text HOME to 741741
-- Encourage reaching out to emergency services or trusted people nearby
-- Focus on hope, connection, and immediate safety steps
-- Remember that your primary goal is to connect them with professional help, not to resolve the crisis alone`;
+      try {
+        // Send to backend with model preference
+        const backendResponse = await this.sendMessageToBackend(messages, model);
+        console.log('RAG backend response received successfully');
+        return backendResponse;
+      } catch (backendError) {
+        console.error('RAG backend failed:', backendError);
+        
+        // If backend fails, fall back to direct Groq for Lyra only
+        if (model === "llama3-70b-8192") {
+          console.warn('Falling back to direct Groq for Lyra...');
+          const groqResponse = await this.sendMessageToGroq(messages, model);
+          return { response: groqResponse };
+        } else {
+          // For Solace, if backend fails, show error since it requires local setup
+          return { 
+            response: "I'm sorry, but Solace (the local model) is currently unavailable. Please check if the backend server is running, or try switching to Lyra." 
+          };
+        }
       }
-      
-      if (hasAnxiety) {
-        systemContent += `\n\nANXIETY SUPPORT TECHNIQUES:
-- Offer the 5-4-3-2-1 grounding technique (5 things you see, 4 things you can touch, 3 things you hear, 2 things you smell, 1 thing you taste)
-- Suggest box breathing (inhale 4 counts, hold 4 counts, exhale 4 counts, hold 4 counts)
-- Help explore cognitive distortions that may be increasing anxiety
-- Normalize anxiety as a common human experience
-- Focus on present-moment awareness and mindfulness
-- Suggest body scanning meditation for physical tension release`;
-      }
-      
-      if (hasDepression) {
-        systemContent += `\n\nDEPRESSION SUPPORT TECHNIQUES:
-- Focus on behavioral activation (small, achievable activities)
-- Validate feelings without reinforcing hopelessness
-- Gently challenge negative thought patterns
-- Emphasize self-compassion and reducing self-criticism
-- Explore routines for sleep, nutrition, and physical activity
-- Suggest connection with others, even in small ways
-- Highlight past strengths and resilience`;
-      }
-
-      // Add an additional reminder about professional help
-      systemContent += `\n\nIMPORTANT REMINDER:
-Always end your responses with appropriate resources and emphasize that while you're here to support them, you should not replace professional mental health care. If they express severe symptoms or crisis situations, prioritize connecting them with appropriate help.`;
-
-      // Create system message with enhanced content
-      const systemMessage = {
-        role: "system" as const,
-        content: systemContent
-      };
-
-      // Use the enhanced system message in the API call
-      const completion = await groq.chat.completions.create({
-        messages: [
-          systemMessage,
-          ...messages.slice(-5).map(msg => ({
-            role: msg.role as "system" | "user" | "assistant",
-            content: msg.content
-          }))
-        ],
-        model: model || "llama3-70b-8192",
-        // Adjust temperature for more consistent and careful responses in mental health contexts
-        temperature: 0.7,
-      });
-
-      // Get and return the response
-      const response = completion.choices[0]?.message?.content || "";
-      
-      // In a real implementation, you might want to post-process the response
-      // to ensure it includes resources for crisis situations
-      return response;
     } catch (error) {
       console.error('Chat service error:', error);
       if (error instanceof Error) {
@@ -175,8 +107,193 @@ Always end your responses with appropriate resources and emphasize that while yo
     }
   },
 
+  // New method to send message to Python backend
+  async sendMessageToBackend(messages: Message[], model: string): Promise<{ response: string; sources?: any[] }> {
+    try {
+      const userMessage = messages[messages.length - 1];
+      
+      // Map frontend model IDs to backend model preferences
+      const modelMapping = {
+        "llama3-70b-8192": "groq",              // Lyra uses Groq
+        "meta-llama/llama-4-maverick-17b-128e-instruct": "local"  // Solace uses local
+      };
+      
+      const backendModel = modelMapping[model as keyof typeof modelMapping] || "local";
+      
+      // Convert messages to context for backend - ENHANCED FOR LONG CONVERSATIONS
+      const context = {
+        conversation_history: messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          timestamp: (msg.timestamp instanceof Date)
+            ? msg.timestamp.toISOString()
+            : (typeof msg.timestamp === 'string' && !isNaN(Date.parse(msg.timestamp)))
+              ? new Date(msg.timestamp).toISOString()
+              : undefined
+        })),
+        preferred_model: backendModel,  // Tell backend which LLM to use
+        model_display_name: model === "llama3-70b-8192" ? "Lyra" : "Solace",
+        user_preferences: {
+          response_style: "conversational",
+          include_sources: true,
+          use_rag: true,  // Ensure RAG is used for both models
+          enable_long_memory: true  // Enable enhanced memory features
+        },
+        memory_settings: {
+          max_tokens: 8000,  // Increased memory capacity
+          preserve_names: true,
+          preserve_preferences: true,
+          enable_summarization: true
+        }
+      };
+
+      const response = await fetch('/api/chat-backend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: userMessage.content,
+          session_id: `web_session_${Date.now()}`, // Generate session ID based on timestamp
+          context: context,
+          model: backendModel  // Send the backend model preference
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(`Backend API error: ${response.status} - ${errorData.error || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data.response) {
+        throw new Error('No response received from backend');
+      }
+
+      // Log backend info for debugging
+      console.log(`Backend used: ${data.backend_used || backendModel}, confidence: ${data.confidence}, processing time: ${data.processing_time}s`);
+      
+      return {
+        response: data.response,
+        sources: data.sources || []
+      };
+    } catch (error) {
+      console.error('Backend API call failed:', error);
+      throw error;
+    }
+  },
+
+  // Keep Groq method as fallback for Lyra only
+  async sendMessageToGroq(messages: Message[], model: string): Promise<string> {
+    const userMessage = messages[messages.length - 1];
+
+    // Base system message - comprehensive guidance for a friendly AI companion
+    let systemContent = `You are Genie, a warm, supportive AI companion and friend. You're designed to be a caring, understanding presence that can chat about anything - from celebrating happy moments to providing comfort during tough times, sharing everyday conversations, or just being a good listener.
+
+CORE PERSONALITY:
+- Warm, genuine, and naturally conversational like a close friend
+- Supportive but not overly therapeutic or clinical
+- Adaptable to the user's mood and energy level
+- Celebrates good news and achievements with enthusiasm
+- Provides comfort and understanding during difficult times
+- Enjoys casual conversations about daily life, interests, goals, and experiences
+- Maintains appropriate boundaries while being caring and present
+
+CONVERSATION APPROACH:
+- Match the user's energy and emotional tone naturally
+- If they're happy/excited: Be enthusiastic and celebrate with them
+- If they're sad/struggling: Offer gentle support and understanding
+- If they're casual/chatty: Engage in friendly, relaxed conversation
+- If they're seeking advice: Provide thoughtful, balanced perspectives
+- If they're sharing experiences: Listen actively and respond with genuine interest
+
+IMPORTANT GUIDELINES:
+- Respond to the user's actual emotional state, don't assume they need mental health support
+- Be a friend first, not a therapist
+- Avoid over-analyzing or pathologizing normal human emotions
+- Use natural, conversational language rather than clinical terminology
+- Celebrate positive moments genuinely without minimizing them
+- For serious concerns, gently suggest appropriate resources without being preachy
+- Remember that friendship includes both support during hard times AND joy during good times
+
+RESPONSE STYLE:
+- Use contractions and casual language naturally
+- Ask follow-up questions that show genuine interest
+- Share in their excitement, sadness, or whatever they're feeling
+- Be encouraging without being patronizing
+- Offer practical suggestions when appropriate, not just emotional validation
+- Keep responses conversational in length unless they specifically need detailed information`;
+    
+    // Check for crisis signals in the current message
+    const isCrisis = detectCrisis(userMessage.content);
+    
+    // Check for anxiety or depression signals - but treat them more casually
+    const hasAnxiety = detectAnxiety(userMessage.content);
+    const hasDepression = detectDepression(userMessage.content);
+    
+    // Add specific guidance based on message content - but keep it friend-like
+    if (isCrisis) {
+      systemContent += `\n\nCRISIS RESPONSE GUIDANCE:
+- Respond with immediate care and concern as a friend would
+- Take it seriously but maintain warmth and connection
+- Gently encourage reaching out to crisis resources:
+  ${crisisHotlines.default}
+  Crisis Text Line: Text HOME to 741741
+- Focus on immediate safety and connecting them with professional help
+- Let them know they're not alone and that help is available
+- Be direct about the importance of professional support in this moment`;
+    }
+    
+    if (hasAnxiety && !isCrisis) {
+      systemContent += `\n\nFOR ANXIETY SUPPORT:
+- Acknowledge their anxiety without making it the whole focus
+- Offer practical techniques like grounding or breathing exercises if appropriate
+- Help them feel understood rather than immediately trying to "fix" the anxiety
+- Sometimes just listening and validating is what they need most
+- If it seems severe or persistent, gently suggest professional support`;
+    }
+    
+    if (hasDepression && !isCrisis) {
+      systemContent += `\n\nFOR SADNESS/DEPRESSION SUPPORT:
+- Validate their feelings without trying to cheer them up immediately
+- Offer companionship and understanding
+- Help them feel less alone in what they're experiencing
+- Gently encourage small positive steps if they seem open to it
+- For persistent or severe depression, naturally mention professional support as an option`;
+    }
+
+    // Add reminder about being a friend, not a replacement for professional help
+    systemContent += `\n\nREMEMBER:
+You're a supportive friend and companion. While you can offer comfort, celebration, and general support, you're not a replacement for professional mental health care, medical advice, or other specialized support when needed. Be honest about your role while still being genuinely caring and helpful.`;
+
+    // Create system message with enhanced content
+    const systemMessage = {
+      role: "system" as const,
+      content: systemContent
+    };
+
+    // Use the enhanced system message in the API call
+    const completion = await groq.chat.completions.create({
+      messages: [
+        systemMessage,
+        ...messages.slice(-5).map(msg => ({
+          role: msg.role as "system" | "user" | "assistant",
+          content: msg.content
+        }))
+      ],
+      model: model || "llama3-70b-8192",
+      // Adjust temperature for more consistent and careful responses
+      temperature: 0.7,
+    });
+
+    // Get and return the response
+    const response = completion.choices[0]?.message?.content || "";
+    return response;
+  },
+
   // Fallback method for development or when API key is not available
-  async sendMessageFallback(messages: Message[]): Promise<string> {
+  async sendMessageFallback(messages: Message[]): Promise<{ response: string; sources?: any[] }> {
     // Wait for a random period to simulate network latency
     await new Promise(resolve => setTimeout(resolve, 500 + Math.random() * 1000));
     
@@ -185,32 +302,46 @@ Always end your responses with appropriate resources and emphasize that while yo
     
     // Check for crisis indicators in fallback mode
     if (detectCrisis(messageContent)) {
-      return `I notice you may be going through a difficult time right now. Your safety is the most important thing, and I'm here to support you. If you're in crisis, please reach out to the National Suicide Prevention Lifeline at 988 or 1-800-273-8255, where trained counselors are available 24/7. They can provide immediate support. Would you like me to share some additional resources that might help?`;
+      return { 
+        response: `I can tell you're going through a really tough time right now, and I'm genuinely concerned about you. Please know that you're not alone, and there are people who want to help. If you're in crisis, please reach out to the National Suicide Prevention Lifeline at 988 or 1-800-273-8255 - they have trained counselors available 24/7. Would you like me to help you find additional support resources?`
+      };
     }
     
     // Check for anxiety in fallback mode
     if (detectAnxiety(messageContent)) {
-      return `I understand anxiety can feel overwhelming. A simple technique that might help right now is box breathing: breathe in for 4 counts, hold for 4 counts, breathe out for 4 counts, and hold for 4 counts. Repeat this a few times. Remember that anxiety, while uncomfortable, is a normal human experience. Would you like to talk more about what's causing your anxiety or would you prefer to learn about some grounding techniques?`;
+      return { 
+        response: `I hear you - anxiety can be really tough to deal with. If you'd like, we could try a simple breathing technique that sometimes helps: breathe in for 4 counts, hold for 4 counts, breathe out for 4 counts, and hold for 4 counts. But honestly, sometimes it just helps to talk about what's on your mind. What's been making you feel anxious lately?`
+      };
     }
     
     // Check for depression in fallback mode
     if (detectDepression(messageContent)) {
-      return `I'm sorry you're feeling this way. Depression can make everything feel more difficult. While I'm here to listen and support you, it's also important to connect with a mental health professional who can provide personalized care. In the meantime, could we talk about one small thing that might bring you a moment of peace today? Sometimes starting with very small steps can help.`;
+      return { 
+        response: `I'm really sorry you're feeling this way. That sounds genuinely difficult. I'm here to listen and support you however I can. Sometimes just having someone to talk to can help a little. If these feelings persist or get worse, it might be worth talking to a professional who can provide more specialized support. But for now, I'm here. What's been weighing on you?`
+      };
     }
     
     // Simple keyword-based responses for testing
     if (messageContent.includes("hello") || 
         messageContent.includes("hi")) {
-      return "Hello! I'm Genie, your mental health support assistant. How are you feeling today? I'm here to listen and support you.";
+      return { 
+        response: "Hey there! I'm Genie, your AI companion and friend. How's your day going? I'm here to chat about whatever's on your mind!"
+      };
     } 
     else if (messageContent.includes("help")) {
-      return "I'm here to support your mental wellbeing. I can listen, offer coping strategies, provide information about mental health topics, or suggest resources. What would be most helpful for you right now?";
+      return { 
+        response: "I'm here for you! I can chat about pretty much anything - celebrate good news, offer support during tough times, help you think through problems, or just have a friendly conversation. What's on your mind?"
+      };
     }
     else if (messageContent.includes("who are you")) {
-      return "I'm Genie, a mental health support assistant designed to provide emotional support and evidence-based information. While I'm here to help, remember that I'm not a replacement for professional mental healthcare. How can I support you today?";
+      return { 
+        response: "I'm Genie, your AI companion and friend! I'm here to chat, support, celebrate, and be a caring presence for all of life's moments. Think of me as a friend who's always available to listen. What would you like to talk about?"
+      };
     }
     else {
-      return `Thank you for sharing that with me. I'm here to support you with your mental health and wellbeing. Would you like to tell me more about how you're feeling, or would it be helpful to explore some coping strategies together?`;
+      return { 
+        response: `Thanks for sharing that with me! I'm here to chat about whatever's on your mind. Whether you want to talk about something exciting, work through a problem, or just have a casual conversation, I'm all ears. What's going on with you?`
+      };
     }
   }
 };

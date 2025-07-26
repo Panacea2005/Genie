@@ -1,0 +1,59 @@
+Primary
+
+1.	Mental Health Corpus
+https://www.kaggle.com/datasets/reihanenamdari/mental-health-corpus
+- Content: Reddit posts from mental health subreddits with diverse topics
+
+https://www.kaggle.com/datasets/nikhileswarkomati/suicide-watch
+
+3.	Crisis Text Line Dataset
+https://www.crisistextline.org/data-philosophy/
+-	Content: Anonymized metadata from crisis text interactions (requires research access)
+
+6.	The DAIC-WOZ Dataset
+https://dcapswoz.ict.usc.edu
+- Content: Clinical interviews for psychological distress assessment
+
+Secondary 
+
+1. Empathetic Dialogues Dataset
+
+https://github.com/facebookresearch/EmpatheticDialogues
+
+2. Counseling and Psychotherapy Transcripts
+
+https://psycnet.apa.org/search/advanced (search for "therapy transcripts")
+
+https://www.kaggle.com/code/jocelyndumlao/chatbot-for-mental-health-conversations/notebook
+
+3. Reddit Data Collection Tools
+
+PRAW (Python Reddit API Wrapper): https://praw.readthedocs.io/
+Reddit API: https://www.reddit.com/dev/api/
+Pushshift Reddit API: https://github.com/pushshift/api
+
+4. Emotion Recognition in Conversation (EmotionX)
+
+https://sites.google.com/view/emotionx2019
+https://github.com/declare-lab/conv-emotion
+
+5. DailyDialog Dataset (has emotion labels)
+
+http://yanran.li/dailydialog
+
+6. HuggingFace
+https://huggingface.co/datasets?sort=trending&search=mental+health 
+https://huggingface.co/datasets?sort=trending&search=emotion 
+https://huggingface.co/datasets?sort=trending&search=counseling
+https://huggingface.co/datasets/facebook/empathetic_dialogues
+
+7. Paperwithcode
+https://paperswithcode.com/datasets?q=mental+health
+https://paperswithcode.com/datasets?q=emotion+recognition
+
+Supporting
+
+8.	World Health Organization Mental Health Data
+https://www.who.int/data/gho/data/themes/mental-health
+- Content: Global data on mental health conditions, resources, and policies
+

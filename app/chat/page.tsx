@@ -27,8 +27,8 @@ import {
   ChevronUp,
   Volume2,
   VolumeX,
+  BarChart3,
 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 import {
   chatService,
   Message as ChatServiceMessage,
@@ -44,6 +44,8 @@ import ModelSelector from "@/components/chat/model-selector";
 import VoiceSelector from "@/components/chat/voice-selector";
 import ModeSelector from "@/components/chat/mode-selector";
 import SpeechMode from "@/components/chat/speech-mode";
+import MessageCitations from "@/components/chat/message-citations";
+import MarkdownMessage from "@/components/chat/markdown-message";
 import Groq from "groq-sdk";
 import { getTTSService } from "@/lib/services/ttsService";
 
@@ -60,6 +62,17 @@ const GradientSphere = dynamic(() => import("@/components/gradient-sphere"), {
 type Message = BaseMessage & {
   tokens?: number;
   speed?: string;
+  sources?: Array<{
+    id: number;
+    text: string;
+    metadata?: {
+      title?: string;
+      url?: string;
+      source?: string;
+    };
+    source: string;
+    score?: number;
+  }>;
 };
 
 export default function ChatPage() {
@@ -98,18 +111,19 @@ export default function ChatPage() {
   const [isLoadingChats, setIsLoadingChats] = useState(true);
   const [generatingText, setGeneratingText] = useState(false);
   const [allMessages, setAllMessages] = useState<Message[]>([]);
+  
+  // Chat state
+  const [showPrivacyMode, setShowPrivacyMode] = useState(false);
+  const [selectedModel, setSelectedModel] = useState("llama3-70b-8192");
+  const [chatMode, setChatMode] = useState<"chat" | "speech">("chat");
 
+  // Restore audio recording refs and state
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [processingAudio, setProcessingAudio] = useState(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Chat state
-  const [showPrivacyMode, setShowPrivacyMode] = useState(false);
-  const [selectedModel, setSelectedModel] = useState("llama3-70b-8192");
-  const [chatMode, setChatMode] = useState<"chat" | "speech">("chat");
 
   // Refs
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -454,10 +468,13 @@ export default function ChatPage() {
 
       // Get response from chat service
       const model = selectedModel;
-      const response = await chatService.sendMessage(
+      const responseData = await chatService.sendMessage(
         [...messages, userMessage],
         model
       );
+
+      const responseText = responseData.response;
+      const responseSources = responseData.sources;
 
       // Simulate typewriter effect for gradual text printing
       // Start with empty response content
@@ -469,13 +486,14 @@ export default function ChatPage() {
           content: "", // Start with empty content that will be gradually filled
           timestamp: new Date(),
           speed: "2.3x FASTER",
-          tokens: Math.floor(response.length / 4), // Rough token estimate
+          tokens: Math.floor(responseText.length / 4), // Rough token estimate
+          sources: responseSources,
         };
         return messagesCopy;
       });
 
       // Gradually add characters to create typing effect
-      const responseChars = response.split("");
+      const responseChars = responseText.split("");
       let currentText = "";
       const typingSpeed = 5; // Adjust typing speed (lower = faster)
 
@@ -504,20 +522,22 @@ export default function ChatPage() {
         ...prev,
         {
           role: "assistant",
-          content: response,
+          content: responseText,
           timestamp: new Date(),
           speed: "2.3x FASTER",
-          tokens: Math.floor(response.length / 4), // Rough token estimate
+          tokens: Math.floor(responseText.length / 4), // Rough token estimate
+          sources: responseSources,
         },
       ]);
 
       // Save the chat after the message exchange
       const assistantMessage: Message = {
         role: "assistant",
-        content: response,
+        content: responseText,
         timestamp: new Date(),
         speed: "2.3x FASTER",
-        tokens: Math.floor(response.length / 4),
+        tokens: Math.floor(responseText.length / 4),
+        sources: responseSources,
       };
 
       // Use allMessages for storage since it has all user and AI messages
@@ -727,7 +747,7 @@ export default function ChatPage() {
 
       {/* Sidebar - Chat History */}
       <div
-        className={`fixed left-0 top-0 bottom-0 w-64 bg-white/80 backdrop-blur-sm z-20 pt-16 transform transition-transform duration-300 ${
+        className={`fixed left-0 top-0 bottom-0 w-64 bg-white/80 backdrop-blur-sm z-20 pt-16 transform transition-transform duration-300 flex flex-col ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
@@ -793,7 +813,7 @@ export default function ChatPage() {
           </div>
         </div>
 
-        <div className="px-4 overflow-y-auto h-[calc(100vh-400px)] scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
+        <div className="px-4 flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
           {isLoadingChats ? (
             <div className="flex justify-center py-8">
               <div className="gentle-loading">
@@ -929,7 +949,7 @@ export default function ChatPage() {
         </div>
 
         {/* Mode Selector - Top Right */}
-        <div className="absolute top-0 right-0 z-40 p-4">
+        <div className="absolute top-0 right-0 z-40 p-4 flex items-center gap-3">
           <ModeSelector selectedMode={chatMode} onModeChange={setChatMode} />
         </div>
 
@@ -1081,15 +1101,7 @@ export default function ChatPage() {
                                           view.
                                         </div>
                                       ) : (
-                                        <ReactMarkdown
-                                          components={
-                                            {
-                                              // ...existing markdown components...
-                                            }
-                                          }
-                                        >
-                                          {message.content}
-                                        </ReactMarkdown>
+                                        <MarkdownMessage content={message.content} />
                                       )}
                                     </div>
                                     {/* Blinking cursor at the end */}
@@ -1124,15 +1136,7 @@ export default function ChatPage() {
                                           view.
                                         </div>
                                       ) : (
-                                        <ReactMarkdown
-                                          components={
-                                            {
-                                              // ...existing markdown components...
-                                            }
-                                          }
-                                        >
-                                          {message.content}
-                                        </ReactMarkdown>
+                                        <MarkdownMessage content={message.content} />
                                       )}
                                     </div>
 
@@ -1182,6 +1186,14 @@ export default function ChatPage() {
                                           )}
                                         </button>
                                       </div>
+                                    )}
+
+                                    {/* Citations component - only show when privacy mode is off */}
+                                    {!showPrivacyMode && message.sources && (
+                                      <MessageCitations 
+                                        citations={message.sources}
+                                        isVisible={!showPrivacyMode}
+                                      />
                                     )}
                                   </div>
                                 )}

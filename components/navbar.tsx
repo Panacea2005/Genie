@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
 import { useState, useEffect } from "react"
 import { useAuth } from "@/app/contexts/AuthContext"
+import { useProfile } from "@/hooks/use-profile"
 
 // Custom button component 
 const NavButton = ({ 
@@ -58,7 +59,12 @@ const NavButton = ({
 // User avatar component with dropdown menu
 const UserAvatar = ({ user, onSignOut }: { user: any, onSignOut: () => void }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const displayName = user?.user_metadata?.name || user?.email?.split('@')[0] || "User"
+  
+  // Use the custom hook to fetch complete profile
+  const { name: profileName, avatarUrl, loading: loadingProfile } = useProfile(user?.id)
+  
+  // Use profile name if available, fallback to auth metadata, then email
+  const displayName = profileName || user?.user_metadata?.name || user?.email?.split('@')[0] || "User"
   const initial = displayName.charAt(0).toUpperCase()
   
   // Close dropdown when clicking outside
@@ -87,9 +93,25 @@ const UserAvatar = ({ user, onSignOut }: { user: any, onSignOut: () => void }) =
         whileHover={{ scale: 1.05 }}
       >
         <span className="text-xs text-gray-500 font-light hidden sm:inline">
-          {displayName}
+          {loadingProfile ? "Loading..." : displayName}
         </span>
-        <div className="w-8 h-8 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-full flex items-center justify-center text-gray-800 text-sm">
+        {avatarUrl ? (
+          <img
+            src={avatarUrl}
+            alt="Profile avatar"
+            className="w-8 h-8 rounded-full object-cover border border-gray-200"
+            onError={(e) => {
+              // If avatar fails to load, hide it and show the fallback
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const fallback = target.nextElementSibling as HTMLElement;
+              if (fallback) fallback.style.display = 'flex';
+            }}
+          />
+        ) : null}
+        <div 
+          className={`w-8 h-8 bg-gradient-to-r from-indigo-100 to-purple-100 rounded-full flex items-center justify-center text-gray-800 text-sm ${avatarUrl ? 'hidden' : ''}`}
+        >
           {initial}
         </div>
       </motion.div>
@@ -104,7 +126,9 @@ const UserAvatar = ({ user, onSignOut }: { user: any, onSignOut: () => void }) =
             transition={{ duration: 0.2 }}
           >
             <div className="p-3 border-b border-gray-100">
-              <p className="text-sm font-medium text-gray-800">{displayName}</p>
+              <p className="text-sm font-medium text-gray-800">
+                {loadingProfile ? "Loading profile..." : displayName}
+              </p>
               <p className="text-xs text-gray-500 truncate">{user.email}</p>
             </div>
             <div className="p-2">

@@ -17,8 +17,17 @@ export interface MoodEntry {
   notes?: string
 }
 
+export interface EmotionDetection {
+  emotion: string
+  confidence: number
+  mental_health_category: string
+  timestamp: Date
+  source: 'voice' | 'text' | 'facial' // Future expansion
+}
+
 export interface MentalHealthContext {
   reportedMoods: MoodEntry[]
+  detectedEmotions: EmotionDetection[]  // New: Track AI-detected emotions
   mentionedSymptoms: string[]
   techniquesRecommended: string[]
   resourcesShared: string[]
@@ -42,6 +51,7 @@ export interface MentalHealthContext {
 function initMentalHealthContext(): MentalHealthContext {
   return {
     reportedMoods: [],
+    detectedEmotions: [],  // New: Initialize detected emotions array
     mentionedSymptoms: [],
     techniquesRecommended: [],
     resourcesShared: [],
@@ -284,6 +294,92 @@ export const chatStore = {
     }
   },
   
+  // Add detected emotion to the mental health context
+  addDetectedEmotion: async (
+    chatId: number,
+    emotion: string,
+    confidence: number,
+    mental_health_category: string,
+    source: 'voice' | 'text' | 'facial' = 'voice'
+  ): Promise<boolean> => {
+    try {
+      const chat = await chatStore.getChatById(chatId);
+      if (!chat) return false;
+      
+      const currentContext = chat.mentalHealthContext || initMentalHealthContext();
+      const updatedEmotions = [
+        ...currentContext.detectedEmotions,
+        {
+          emotion,
+          confidence,
+          mental_health_category,
+          timestamp: new Date(),
+          source
+        }
+      ];
+      
+      // Keep only last 20 emotion detections to prevent unlimited growth
+      const trimmedEmotions = updatedEmotions.slice(-20);
+      
+      return await chatStore.updateMentalHealthContext(chatId, {
+        detectedEmotions: trimmedEmotions
+      });
+    } catch (err) {
+      console.error('Error adding detected emotion:', err);
+      return false;
+    }
+  },
+
+  // Get emotion patterns for analysis
+  getEmotionPatterns: async (chatId: number): Promise<{
+    recentEmotions: EmotionDetection[];
+    dominantEmotion: string | null;
+    riskIndicators: string[];
+  }> => {
+    try {
+      const chat = await chatStore.getChatById(chatId);
+      if (!chat || !chat.mentalHealthContext) {
+        return { recentEmotions: [], dominantEmotion: null, riskIndicators: [] };
+      }
+      
+      const recentEmotions = chat.mentalHealthContext.detectedEmotions.slice(-10);
+      
+      // Find most common emotion in recent detections
+      const emotionCounts: { [emotion: string]: number } = {};
+      recentEmotions.forEach(detection => {
+        emotionCounts[detection.emotion] = (emotionCounts[detection.emotion] || 0) + 1;
+      });
+      
+      const emotionKeys = Object.keys(emotionCounts);
+      const dominantEmotion = emotionKeys.length > 0 
+        ? emotionKeys.reduce((a, b) => emotionCounts[a] > emotionCounts[b] ? a : b)
+        : null;
+      
+      // Identify risk indicators
+      const riskIndicators: string[] = [];
+      const riskCategories = ['depression_risk', 'anxiety_risk', 'stress_response'];
+      const recentRiskEmotions = recentEmotions.filter(detection => 
+        riskCategories.includes(detection.mental_health_category)
+      );
+      
+      if (recentRiskEmotions.length >= 3) {
+        riskIndicators.push('Multiple risk emotions detected');
+      }
+      
+      const highConfidenceRisk = recentRiskEmotions.filter(detection => 
+        detection.confidence > 0.7
+      );
+      if (highConfidenceRisk.length >= 2) {
+        riskIndicators.push('High confidence risk emotions detected');
+      }
+      
+      return { recentEmotions, dominantEmotion, riskIndicators };
+    } catch (err) {
+      console.error('Error analyzing emotion patterns:', err);
+      return { recentEmotions: [], dominantEmotion: null, riskIndicators: [] };
+    }
+  },
+
   // Update or create a safety plan
   updateSafetyPlan: async (
     chatId: number,

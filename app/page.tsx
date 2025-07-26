@@ -249,9 +249,9 @@ export default function Home() {
       {/* Navbar component */}
       <Navbar currentPage="home" />
 
-      {/* Main content - adjusted to leave space for footer */}
+      {/* Main content - responsive padding and spacing */}
       <div className="flex-1 flex flex-col items-center justify-center" style={{ maxHeight: 'calc(100vh - 120px)' }}>
-        <div className="flex flex-col items-center max-w-2xl w-full px-4">
+        <div className="flex flex-col items-center max-w-2xl w-full px-4 sm:px-6 lg:px-8">
           <AnimatePresence mode="wait">
             {/* Logo and label */}
             <motion.div
@@ -268,7 +268,7 @@ export default function Home() {
               }}
             >
               <motion.div 
-                className="w-5 h-5 flex items-center justify-center text-base text-gray-700"
+                className="w-4 h-4 sm:w-5 sm:h-5 flex items-center justify-center text-sm sm:text-base text-gray-700"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
               >
@@ -287,10 +287,10 @@ export default function Home() {
               {sections[activeSection].labelText}
             </motion.div>
   
-            {/* Main title - ENHANCED: Larger typography for section title */}
+            {/* Main title - responsive typography */}
             <motion.h2 
               key={`title-${activeSection}`}
-              className="text-3xl md:text-4xl font-light text-center mb-8 text-gray-800 z-10"
+              className="text-2xl sm:text-3xl md:text-4xl font-light text-center mb-6 sm:mb-8 text-gray-800 z-10 px-4"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
@@ -303,16 +303,16 @@ export default function Home() {
             </motion.h2>
           </AnimatePresence>
           
-          {/* Sphere and search bar */}
-          <div className="relative flex flex-col items-center justify-center my-4 w-full">
+          {/* Sphere and search bar - responsive container */}
+          <div className="relative flex flex-col items-center justify-center my-4 w-full max-w-lg">
             {/* 3D Gradient Sphere with enhanced animations */}
-            <motion.div animate={sphereControls}>
+            <motion.div animate={sphereControls} className="scale-75 sm:scale-90 md:scale-100">
               <GradientSphere />
             </motion.div>
             
-            {/* Search bar positioned on top of the sphere - now shown for ALL sections including intro */}
+            {/* Search bar positioned on top of the sphere - responsive positioning */}
             <motion.div 
-              className="absolute w-full max-w-md z-20" 
+              className="absolute w-full max-w-xs sm:max-w-md px-4 sm:px-0 z-20" 
               style={{ top: "calc(50% - 24px)" }}
               initial={{ opacity: 0, y: 5 }}
               animate={{ opacity: 1, y: 0 }}
@@ -324,10 +324,10 @@ export default function Home() {
               />
             </motion.div>
             
-            {/* Help text below search bar for Intro section only */}
+            {/* Help text below search bar for Intro section only - responsive */}
             {activeSection === 0 && (
               <motion.div
-                className="absolute w-full max-w-md z-20 text-center"
+                className="absolute w-full max-w-xs sm:max-w-md px-4 sm:px-0 z-20 text-center"
                 style={{ top: "calc(50% + 30px)" }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -342,11 +342,11 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Progress indicator on right side - vertical bars - HIDE WHEN CARD EXPANDED */}
+      {/* Progress indicator - responsive positioning */}
       <AnimatePresence>
         {!expandedCard && (
           <motion.div 
-            className="fixed right-6 top-1/2 transform -translate-y-1/2 flex flex-col items-center space-y-4 z-30"
+            className="fixed right-3 sm:right-6 top-1/2 transform -translate-y-1/2 flex flex-col items-center space-y-3 sm:space-y-4 z-30"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
@@ -361,10 +361,10 @@ export default function Home() {
                 whileTap={{ scale: 0.95 }}
               >
                 <motion.div 
-                  className={`${activeSection === index ? 'h-6 bg-gray-400' : 'h-1.5 bg-gray-200'} 
+                  className={`${activeSection === index ? 'h-5 sm:h-6 bg-gray-400' : 'h-1.5 bg-gray-200'} 
                     w-1.5 rounded-full transition-all duration-300`}
                   animate={{
-                    height: activeSection === index ? 24 : 6
+                    height: activeSection === index ? (typeof window !== 'undefined' && window.innerWidth < 640 ? 20 : 24) : 6
                   }}
                   transition={{ 
                     type: "spring", 
@@ -374,11 +374,11 @@ export default function Home() {
                   }}
                 />
                 
-                {/* Show label on hover */}
+                {/* Show label on hover - hidden on small screens */}
                 <AnimatePresence>
                   {activeSection === index && (
                     <motion.div
-                      className="absolute right-4 bg-white/90 px-2 py-1 rounded-md shadow-sm text-xs text-gray-600 whitespace-nowrap"
+                      className="absolute right-4 bg-white/90 px-2 py-1 rounded-md shadow-sm text-xs text-gray-600 whitespace-nowrap hidden sm:block"
                       style={{ right: "100%", marginRight: "12px" }}
                       initial={{ opacity: 0, x: 10 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -395,11 +395,11 @@ export default function Home() {
         )}
       </AnimatePresence>
 
-      {/* Enhanced expanded card view with elegant styling */}
+      {/* Enhanced expanded card view - fully responsive */}
       <AnimatePresence>
         {expandedCard && (
           <motion.div 
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/30"
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/30 p-2 sm:p-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -407,7 +407,7 @@ export default function Home() {
           >
             <motion.div
               ref={expandedCardRef}
-              className="relative w-[85vw] h-[85vh] bg-cover bg-center rounded-3xl overflow-hidden"
+              className="relative w-full h-full sm:w-[80vw] sm:h-[85vh] lg:w-[80vw] lg:h-[85vh] bg-cover bg-center rounded-2xl sm:rounded-3xl overflow-hidden"
               style={{ 
                 backgroundImage: `url(${sections.find(s => s.id === expandedCard)?.imageUrl || '/images/default.jpg'})` 
               }}
@@ -424,27 +424,27 @@ export default function Home() {
               {/* Subtle gradient overlay for better text readability */}
               <div className="absolute inset-0 bg-gradient-to-b from-black/30 via-transparent to-black/40" />
               
-              {/* Close button with elegant animation */}
+              {/* Close button - responsive positioning */}
               <motion.div 
-                className="absolute top-4 right-4 z-50"
+                className="absolute top-3 right-3 sm:top-4 sm:right-4 z-50"
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: 0.3, duration: 0.3 }}
               >
                 <motion.button 
-                  className="w-10 h-10 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
+                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/30 backdrop-blur-sm flex items-center justify-center border border-white/20"
                   whileHover={{ scale: 1.05, backgroundColor: "rgba(255, 255, 255, 0.4)" }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleCardClose}
                 >
-                  <span className="text-white text-lg">×</span>
+                  <span className="text-white text-lg sm:text-xl">×</span>
                 </motion.button>
               </motion.div>
               
-              {/* Animated card with enhanced styling */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 w-3/4 max-w-xl">
+              {/* Animated card - responsive content */}
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 w-full px-4 sm:px-8 lg:w-3/4 max-w-xl">
                 <motion.div 
-                  className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-8 overflow-hidden"
+                  className="bg-white/10 backdrop-blur-md border border-white/20 rounded-xl p-4 sm:p-6 lg:p-8 overflow-hidden"
                   style={{
                     boxShadow: "0 4px 30px rgba(0, 0, 0, 0.1)",
                   }}
@@ -462,42 +462,42 @@ export default function Home() {
                   
                   <div className="text-xs text-white/80 uppercase mb-1 tracking-wider">Portal</div>
                   
-                  {/* ENHANCED: Larger typography for title */}
-                  <h2 className="text-5xl font-light text-white mb-4 tracking-tight">
+                  {/* Responsive title typography */}
+                  <h2 className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-light text-white mb-3 sm:mb-4 tracking-tight">
                     {sections.find(s => s.id === expandedCard)?.cardTitle}
                   </h2>
                   
-                  <div className="text-sm text-white/90 mb-6 tracking-wide">
+                  <div className="text-xs sm:text-sm text-white/90 mb-4 sm:mb-6 tracking-wide">
                     {sections.find(s => s.id === expandedCard)?.cardSubtitle}
                   </div>
                   
-                  <p className="text-white/85 text-sm leading-relaxed mb-8 font-light">
+                  <p className="text-white/85 text-xs sm:text-sm leading-relaxed mb-6 sm:mb-8 font-light">
                     {sections.find(s => s.id === expandedCard)?.cardDescription}
                   </p>
                   
                   <div className="flex items-center mt-2">
-                    <div className="w-6 h-6 rounded-full bg-white/20 border border-white/40 flex items-center justify-center mr-2 overflow-hidden">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white/20 border border-white/40 flex items-center justify-center mr-2 overflow-hidden">
                       <span className="text-white text-xs">{sections.find(s => s.id === expandedCard)?.iconText || '⚙'}</span>
                     </div>
-                    <span className="text-white/90 text-sm font-light tracking-wide">
+                    <span className="text-white/90 text-xs sm:text-sm font-light tracking-wide">
                       {sections.find(s => s.id === expandedCard)?.cardLabel}
                     </span>
                   </div>
                 </motion.div>
               </div>
               
-              {/* Enhanced position indicator */}
-              <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-2">
+              {/* Position indicator - responsive */}
+              <div className="absolute bottom-4 sm:bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-2">
                 {sections.map((section, index) => (
                   <motion.div 
                     key={index}
                     className={`rounded-full cursor-pointer ${
                       section.id === expandedCard 
-                        ? "bg-white w-6 h-1.5" 
+                        ? "bg-white w-4 sm:w-6 h-1.5" 
                         : "bg-white/40 w-1.5 h-1.5"
                     }`}
                     animate={{
-                      width: section.id === expandedCard ? 24 : 6,
+                      width: section.id === expandedCard ? (typeof window !== 'undefined' && window.innerWidth < 640 ? 16 : 24) : 6,
                     }}
                     whileHover={{ 
                       backgroundColor: section.id === expandedCard 
@@ -513,11 +513,11 @@ export default function Home() {
                 ))}
               </div>
               
-              {/* ENHANCED: Improved previous/next navigation with better hover effects */}
-              <div className="absolute bottom-20 left-0 right-0 flex justify-between px-12 text-white/50 text-sm">
+              {/* Navigation buttons - responsive and safe positioning */}
+              <div className="absolute bottom-12 sm:bottom-20 left-0 right-0 flex justify-between px-4 sm:px-8 lg:px-12 text-white/50 text-sm">
                 {expandedCard !== sections[0].id && (
                   <motion.div 
-                    className="flex items-center cursor-pointer group px-4 py-2 rounded-full"
+                    className="flex items-center cursor-pointer group px-2 sm:px-4 py-2 rounded-full"
                     initial={{ opacity: 0, x: -10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.5, duration: 0.3 }}
@@ -532,16 +532,16 @@ export default function Home() {
                       }
                     }}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 transform group-hover:-translate-x-1 transition-transform duration-300">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 sm:mr-2 transform group-hover:-translate-x-1 transition-transform duration-300">
                       <path d="M19 12H5M12 19l-7-7 7-7"/>
                     </svg>
-                    <span className="text-sm font-light group-hover:text-white transition-colors duration-300">Previous</span>
+                    <span className="text-xs sm:text-sm font-light group-hover:text-white transition-colors duration-300">Previous</span>
                   </motion.div>
                 )}
                 
                 {expandedCard !== sections[sections.length-1].id && (
                   <motion.div 
-                    className="flex items-center ml-auto cursor-pointer group px-4 py-2 rounded-full"
+                    className="flex items-center ml-auto cursor-pointer group px-2 sm:px-4 py-2 rounded-full"
                     initial={{ opacity: 0, x: 10 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.5, duration: 0.3 }}
@@ -556,8 +556,8 @@ export default function Home() {
                       }
                     }}
                   >
-                    <span className="text-sm font-light group-hover:text-white transition-colors duration-300">Next</span>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-2 transform group-hover:translate-x-1 transition-transform duration-300">
+                    <span className="text-xs sm:text-sm font-light group-hover:text-white transition-colors duration-300">Next</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="ml-1 sm:ml-2 transform group-hover:translate-x-1 transition-transform duration-300">
                       <path d="M5 12h14M12 5l7 7-7 7"/>
                     </svg>
                   </motion.div>

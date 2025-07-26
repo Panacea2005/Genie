@@ -25,3 +25,45 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+*.egg-info/
+dist/
+build/
+
+# AI Models and Data
+backend/ai_models/huggingface_cache/
+backend/ai_models/indexes/
+backend/ai_models/logs/
+backend/ai_models/model/llama1b-qlora-mh/
+backend/data/raw/
+backend/data/processed/
+backend/data/combined/
+backend/data/analysis/
+backend/data/training/
+
+# Large files
+*.zip
+*.safetensors
+*.bin
+*.pkl
+*.faiss
+*.model
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db

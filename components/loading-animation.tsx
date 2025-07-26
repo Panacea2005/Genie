@@ -79,17 +79,19 @@ export default function LoadingAnimation() {
     setIsMounted(true)
   }, [])
 
-  // Smooth color transition animation - only on client
+  // Enhanced smooth color transition animation with higher frame rate
   useEffect(() => {
     if (!isMounted) return
 
-    const colorDuration = 12000
+    const colorDuration = 15000 // Slightly longer for smoother transitions
     const startTime = Date.now()
 
     const updateColorProgress = () => {
       const elapsed = Date.now() - startTime
       const newProgress = (elapsed % colorDuration) / colorDuration
-      setColorProgress(newProgress)
+      // Smoother easing for color transitions
+      const easedProgress = 0.5 - Math.cos(newProgress * Math.PI * 2) / 2
+      setColorProgress(easedProgress)
 
       animationFrameRef.current = requestAnimationFrame(updateColorProgress)
     }
@@ -103,74 +105,113 @@ export default function LoadingAnimation() {
     }
   }, [isMounted])
 
-  // Main choreographed animation sequence
+  // Enhanced choreographed animation sequence with smoother transitions
   useEffect(() => {
     if (!isMounted) return
 
     const animationSequence = async () => {
-      // 1. Start with flower pattern animation
+      // 1. Start with flower pattern animation - enhanced smoothness
       flowerControls.start({
-        opacity: 1,
-        scale: 1,
-        rotate: 360,
+        opacity: [0, 0.3, 0.7, 1],
+        scale: [0.2, 0.8, 1.1, 1],
+        rotate: [0, 180, 360],
+        y: [10, -2, 0],
         transition: { 
-          opacity: { duration: 1.2, ease: "easeInOut" },
-          scale: { duration: 1.5, ease: [0.34, 1.56, 0.64, 1] },
-          rotate: { duration: 3, ease: "easeInOut" }
+          duration: 3.5, // Slightly longer for smoother effect
+          ease: [0.16, 1, 0.3, 1], // Smoother easing curve
+          opacity: { 
+            duration: 2, 
+            ease: "easeOut",
+            times: [0, 0.4, 0.7, 1]
+          },
+          scale: { 
+            duration: 3.5, 
+            ease: [0.34, 1.56, 0.64, 1],
+            times: [0, 0.5, 0.8, 1]
+          },
+          rotate: { 
+            duration: 3.5, 
+            ease: [0.25, 0.46, 0.45, 0.94],
+            times: [0, 0.6, 1]
+          },
+          y: {
+            duration: 2.5,
+            ease: [0.34, 1.56, 0.64, 1],
+            times: [0, 0.7, 1]
+          }
         }
       })
       
-      // Start particle effect around flower
+      // Start particle effect around flower with smoother entrance
       particleControls.start({
-        opacity: 1,
-        transition: { duration: 1, ease: "easeInOut" }
+        opacity: [0, 1],
+        transition: { 
+          duration: 1.8, 
+          ease: [0.25, 0.46, 0.45, 0.94],
+          staggerChildren: 0.05
+        }
       })
       
       // Small pause to show flower pattern
       await new Promise(resolve => {
-        const timeout = setTimeout(resolve, 2000)
+        const timeout = setTimeout(resolve, 2200)
         timeoutsRef.current.push(timeout)
       })
       
-      // 2. Flower transforms into sphere
+      // 2. Flower transforms into sphere with enhanced smoothness
       flowerControls.start({
-        opacity: [1, 0.7, 0.3, 0],
-        scale: [1, 0.9, 0.6, 0.3],
-        rotate: 540,
+        opacity: [1, 0.8, 0.5, 0.2, 0],
+        scale: [1, 1.05, 0.9, 0.6, 0.3],
+        rotate: [360, 450, 540],
+        y: [0, -5, 0, 5, 0],
         transition: { 
-          duration: 2.5, 
-          ease: "easeInOut",
+          duration: 3.2, 
+          ease: [0.7, 0, 0.84, 0],
+          times: [0, 0.2, 0.5, 0.8, 1],
+          opacity: { ease: [0.25, 0.46, 0.45, 0.94] },
+          scale: { ease: [0.34, 1.56, 0.64, 1] },
+          rotate: { ease: "easeInOut" },
+          y: { ease: [0.16, 1, 0.3, 1] }
         }
       })
       
-      // Sphere emerges from center of flower
+      // Sphere emerges from center of flower with enhanced smoothness
       sphereControls.start({
-        scale: [0, 0.5, 0.9, 1],
-        opacity: [0, 0.3, 0.7, 1],
+        scale: [0, 0.2, 0.6, 0.9, 1],
+        opacity: [0, 0.2, 0.5, 0.8, 1],
+        rotate: [0, 90, 180, 270, 360],
         transition: { 
-          duration: 2.5,
-          ease: [0.34, 1.56, 0.64, 1],
-          times: [0, 0.2, 0.6, 1]
+          duration: 3.2,
+          ease: [0.16, 1, 0.3, 1],
+          times: [0, 0.15, 0.4, 0.7, 1],
+          scale: { ease: [0.34, 1.56, 0.64, 1] },
+          opacity: { ease: "easeOut" },
+          rotate: { ease: [0.25, 0.46, 0.45, 0.94] }
         }
       })
       
-      // Particles gradually fade out
+      // Particles gradually fade out with smoother transition
       particleControls.start({
-        opacity: [1, 0.7, 0.3, 0],
-        scale: [1, 0.8, 0.5, 0.2],
+        opacity: [1, 0.8, 0.5, 0.2, 0],
+        scale: [1, 0.9, 0.7, 0.4, 0.2],
+        y: [0, -10, -15, -20, -25],
         transition: { 
-          duration: 2.5,
-          ease: "easeInOut",
+          duration: 3.2,
+          ease: [0.7, 0, 0.84, 0],
+          times: [0, 0.3, 0.6, 0.8, 1],
+          opacity: { ease: "easeOut" },
+          scale: { ease: [0.25, 0.46, 0.45, 0.94] },
+          y: { ease: "easeOut" }
         }
       })
       
-      // Start pulse effect in sphere
+      // Start enhanced pulse effect in sphere
       pulseControls.start({
-        scale: [0.8, 1.2, 0.8],
-        opacity: [0.3, 0.5, 0.3],
+        scale: [0.8, 1.15, 0.95, 1.2, 0.8],
+        opacity: [0.3, 0.6, 0.4, 0.7, 0.3],
         transition: { 
-          duration: 3, 
-          ease: "easeInOut",
+          duration: 4, 
+          ease: [0.37, 0, 0.63, 1],
           repeat: Infinity,
           repeatType: "loop"
         }
@@ -178,66 +219,82 @@ export default function LoadingAnimation() {
       
       // Wait for sphere to fully form
       await new Promise(resolve => {
-        const timeout = setTimeout(resolve, 2000)
+        const timeout = setTimeout(resolve, 2500)
         timeoutsRef.current.push(timeout)
       })
       
-      // 3. Sphere expands
+      // 3. Sphere expands with enhanced smoothness
       sphereControls.start({
-        scale: [1, 1.5, 3, 5, 10],
-        opacity: [1, 1, 0.8, 0.5, 0],
+        scale: [1, 1.3, 2, 3.5, 6, 12],
+        opacity: [1, 1, 0.95, 0.8, 0.5, 0],
+        rotate: [360, 450, 540, 720, 900, 1080],
+        filter: ["blur(0px)", "blur(1px)", "blur(3px)", "blur(8px)", "blur(15px)", "blur(30px)"],
         transition: { 
-          scale: { 
-            duration: 3, 
-            ease: [0.23, 1, 0.32, 1],
-            times: [0, 0.2, 0.5, 0.8, 1]
-          },
-          opacity: { 
-            duration: 3, 
-            ease: "easeInOut",
-            times: [0, 0.3, 0.6, 0.8, 1]
-          }
+          duration: 4,
+          ease: [0.19, 1, 0.22, 1],
+          times: [0, 0.15, 0.3, 0.5, 0.7, 1],
+          scale: { ease: [0.25, 0.46, 0.45, 0.94] },
+          opacity: { ease: [0.16, 1, 0.3, 1] },
+          rotate: { ease: "easeInOut" },
+          filter: { ease: "easeOut" }
         }
       })
       
-      // Background gradient fades in
+      // Background gradient fades in with smoother transition
       backgroundControls.start({
-        opacity: 1,
-        transition: { duration: 2, ease: "easeInOut", delay: 0.5 }
+        opacity: [0, 0.4, 0.8, 1],
+        scale: [0.9, 1],
+        transition: { 
+          duration: 2.8, 
+          ease: [0.25, 0.46, 0.45, 0.94], 
+          delay: 0.8,
+          times: [0, 0.4, 0.7, 1],
+          scale: { ease: [0.34, 1.56, 0.64, 1] }
+        }
       })
       
       // Wait for sphere expansion
       await new Promise(resolve => {
-        const timeout = setTimeout(resolve, 1500)
+        const timeout = setTimeout(resolve, 2000)
         timeoutsRef.current.push(timeout)
       })
       
-      // 4. Show Genie logo
+      // 4. Show Genie logo with enhanced entrance
       logoControls.start({
-        opacity: 1,
-        y: 0,
-        scale: 1,
+        opacity: [0, 0.3, 0.7, 1],
+        y: [20, 5, -2, 0],
+        scale: [0.8, 1.05, 0.98, 1],
+        rotate: [3, -1, 0.5, 0],
         transition: { 
-          duration: 1, 
-          ease: [0.34, 1.56, 0.64, 1]
+          duration: 2.2, 
+          ease: [0.16, 1, 0.3, 1],
+          times: [0, 0.4, 0.7, 1],
+          opacity: { ease: "easeOut" },
+          y: { ease: [0.34, 1.56, 0.64, 1] },
+          scale: { ease: [0.25, 0.46, 0.45, 0.94] },
+          rotate: { ease: [0.37, 0, 0.63, 1] }
         }
       })
       
       // Small pause to show logo
       await new Promise(resolve => {
-        const timeout = setTimeout(resolve, 1000)
+        const timeout = setTimeout(resolve, 1200)
         timeoutsRef.current.push(timeout)
       })
       
-      // 5. Fade to white
+      // 5. Fade to white with enhanced smoothness
       overlayControls.start({
-        opacity: 1,
-        transition: { duration: 1.8, ease: "easeInOut" }
+        opacity: [0, 0.2, 0.5, 0.8, 1],
+        transition: { 
+          duration: 2.5, 
+          ease: [0.25, 0.46, 0.45, 0.94],
+          times: [0, 0.3, 0.5, 0.7, 1]
+        }
       })
       
       // Final pause
       await new Promise(resolve => {
-        const timeout = setTimeout(resolve, 1500)
+        const timeout = setTimeout(resolve, 2000)
         timeoutsRef.current.push(timeout)
       })
       
@@ -255,7 +312,7 @@ export default function LoadingAnimation() {
     }
   }, [isMounted, flowerControls, sphereControls, backgroundControls, overlayControls, pulseControls, logoControls, particleControls])
 
-  // Advanced color interpolation function
+  // Enhanced color interpolation function with smoother transitions
   const interpolateColor = (color1: string, color2: string, factor: number) => {
     const hex2rgb = (hex: string) => {
       const r = parseInt(hex.slice(1, 3), 16)
@@ -264,6 +321,7 @@ export default function LoadingAnimation() {
       return [r, g, b]
     }
     
+    // Enhanced easing for smoother color transitions
     const easedFactor = 0.5 - Math.cos(factor * Math.PI) / 2
     
     const [r1, g1, b1] = hex2rgb(color1)
@@ -276,13 +334,14 @@ export default function LoadingAnimation() {
     return `rgb(${r}, ${g}, ${b})`
   }
   
-  // Dynamic sphere gradient styles - only apply on client
+  // Enhanced dynamic sphere gradient with smoother transitions
   const sphereGradient = isMounted ? {
     background: `radial-gradient(circle, 
       ${interpolateColor("#c084fc", "#93c5fd", colorProgress)} 0%, 
       ${interpolateColor("#60a5fa", "#818cf8", colorProgress)} 50%, 
       ${interpolateColor("#93c5fd", "#c084fc", colorProgress)} 100%)`,
     filter: `blur(${4 + Math.sin(colorProgress * Math.PI * 4) * 2}px)`,
+    transform: `scale(${1 + Math.sin(colorProgress * Math.PI * 2) * 0.02})`, // Subtle breathing effect
   } : {
     background: `radial-gradient(circle, #c084fc 0%, #60a5fa 50%, #93c5fd 100%)`,
     filter: `blur(4px)`,
@@ -301,7 +360,7 @@ export default function LoadingAnimation() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.8 }}
+          transition={{ duration: 1, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
           {/* Flower pattern that transforms into sphere */}
           <motion.div
@@ -315,10 +374,12 @@ export default function LoadingAnimation() {
               width={200}
               height={200}
               className="w-full h-full"
-              style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,0.5))" }}
+              style={{ 
+                filter: `drop-shadow(0 0 12px rgba(255,255,255,0.6)) saturate(${1 + colorProgress * 0.3})`,
+              }}
             />
             
-            {/* Particle effect around flower - only render on client */}
+            {/* Enhanced particle effect around flower with smoother animations */}
             {isMounted && (
               <motion.div
                 className="absolute w-full h-full"
@@ -334,6 +395,7 @@ export default function LoadingAnimation() {
                       height: particle.size,
                       left: '50%',
                       top: '50%',
+                      boxShadow: "0 0 4px rgba(255,255,255,0.8)"
                     }}
                     initial={{ 
                       x: -particle.size / 2, 
@@ -343,18 +405,27 @@ export default function LoadingAnimation() {
                       rotate: 0 
                     }}
                     animate={{ 
-                      x: particle.x - particle.size / 2, 
-                      y: particle.y - particle.size / 2, 
-                      scale: particle.scale,
-                      opacity: [0, particle.opacity, 0],
-                      rotate: particle.rotation 
+                      x: [
+                        -particle.size / 2,
+                        particle.x - particle.size / 2,
+                        particle.x * 1.2 - particle.size / 2
+                      ],
+                      y: [
+                        -particle.size / 2,
+                        particle.y - particle.size / 2,
+                        particle.y * 1.2 - particle.size / 2
+                      ],
+                      scale: [0, particle.scale, particle.scale * 1.1, 0],
+                      opacity: [0, particle.opacity, particle.opacity * 0.8, 0],
+                      rotate: [0, particle.rotation, particle.rotation + 180] 
                     }}
                     transition={{ 
-                      duration: particle.duration, 
-                      ease: "easeOut",
+                      duration: particle.duration * 1.2, 
+                      ease: [0.25, 0.46, 0.45, 0.94],
                       delay: particle.delay,
                       repeat: Infinity,
-                      repeatType: "loop"
+                      repeatType: "loop",
+                      times: [0, 0.3, 0.7, 1]
                     }}
                   />
                 ))}
@@ -362,84 +433,136 @@ export default function LoadingAnimation() {
             )}
           </motion.div>
           
-          {/* Sphere that emerges from flower */}
+          {/* Enhanced sphere that emerges from flower */}
           <motion.div
             className="absolute rounded-full z-20 w-40 h-40"
             style={sphereGradient}
             initial={{ scale: 0, opacity: 0 }}
             animate={sphereControls}
           >
-            {/* Animated inner gradients for depth */}
+            {/* Enhanced animated inner gradients for depth */}
             <motion.div 
               className="absolute inset-0 rounded-full"
               animate={{
                 rotate: 360,
+                scale: [1, 1.02, 1],
               }}
               transition={{
-                duration: 20,
-                repeat: Infinity,
-                ease: "linear"
+                rotate: { duration: 25, repeat: Infinity, ease: "linear" },
+                scale: { duration: 6, repeat: Infinity, ease: "easeInOut" }
               }}
             >
               <div 
                 className="absolute inset-0 rounded-full" 
                 style={{ 
-                  background: "radial-gradient(circle at 60% 40%, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 60%)",
-                  opacity: 0.7
+                  background: "radial-gradient(circle at 60% 40%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.3) 50%, rgba(255,255,255,0) 70%)",
+                  opacity: 0.8
                 }} 
               />
             </motion.div>
             
-            {/* Pulse effect */}
+            {/* Enhanced pulse effect with smoother transitions */}
             <motion.div 
               className="absolute inset-0 rounded-full bg-white/20"
               initial={{ scale: 0.8, opacity: 0.3 }}
               animate={pulseControls}
+              style={{ filter: "blur(2px)" }}
             />
             
-            {/* Second pulse with offset timing */}
+            {/* Enhanced second pulse with offset timing */}
             <motion.div 
               className="absolute inset-0 rounded-full bg-white/10"
               initial={{ scale: 0.8, opacity: 0.2 }}
               animate={{
-                scale: [0.6, 1, 0.6],
-                opacity: [0.2, 0.4, 0.2]
+                scale: [0.6, 1.1, 0.6],
+                opacity: [0.2, 0.5, 0.2],
+                rotate: [0, 360]
               }}
               transition={{
-                duration: 4,
+                scale: { duration: 5, repeat: Infinity, ease: [0.37, 0, 0.63, 1] },
+                opacity: { duration: 5, repeat: Infinity, ease: "easeInOut" },
+                rotate: { duration: 20, repeat: Infinity, ease: "linear" },
+                delay: 1.5
+              }}
+              style={{ filter: "blur(3px)" }}
+            />
+            
+            {/* Additional inner glow for extra depth */}
+            <motion.div 
+              className="absolute inset-2 rounded-full"
+              animate={{
+                opacity: [0.3, 0.7, 0.3],
+                scale: [0.9, 1.05, 0.9]
+              }}
+              transition={{
+                duration: 3.5,
                 repeat: Infinity,
-                ease: "easeInOut",
-                delay: 1
+                ease: [0.25, 0.46, 0.45, 0.94]
+              }}
+              style={{ 
+                background: `radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 60%)`,
+                filter: "blur(1px)"
               }}
             />
           </motion.div>
           
-          {/* Genie logo that appears later */}
+          {/* Enhanced Genie logo with smoother animations */}
           <motion.div
             className="absolute z-30"
-            initial={{ opacity: 0, y: 10, scale: 0.9 }}
+            initial={{ opacity: 0, y: 20, scale: 0.8 }}
             animate={logoControls}
           >
             <div className="flex flex-col items-center">
-              {/* Mini sphere icon */}
-              <div className="w-6 h-6 mb-3 rounded-full relative overflow-hidden" style={{ 
-                background: "linear-gradient(135deg, #e0f2ff 0%, #d8d6ff 45%, #f0d5ff 100%)"
-              }}>
-                <div className="absolute inset-0 rounded-full bg-white/40" style={{ filter: "blur(1px)" }} />
-                <div className="absolute top-0 left-0 w-full h-full rounded-full" style={{ 
-                  background: "linear-gradient(135deg, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.2) 100%)",
-                  opacity: 0.7
-                }} />
-              </div>
+              {/* Enhanced mini sphere icon */}
+              <motion.div 
+                className="w-6 h-6 mb-3 rounded-full relative overflow-hidden" 
+                animate={{
+                  scale: [1, 1.05, 1],
+                  rotate: [0, 360]
+                }}
+                transition={{
+                  scale: { duration: 4, repeat: Infinity, ease: "easeInOut" },
+                  rotate: { duration: 20, repeat: Infinity, ease: "linear" }
+                }}
+                style={{ 
+                  background: "linear-gradient(135deg, #e0f2ff 0%, #d8d6ff 45%, #f0d5ff 100%)",
+                  boxShadow: "0 0 8px rgba(255,255,255,0.4)"
+                }}
+              >
+                <div className="absolute inset-0 rounded-full bg-white/50" style={{ filter: "blur(1.5px)" }} />
+                <motion.div 
+                  className="absolute top-0 left-0 w-full h-full rounded-full"
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                  style={{ 
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 50%, rgba(255,255,255,0.3) 100%)",
+                    opacity: 0.8
+                  }} 
+                />
+              </motion.div>
               
-              {/* Genie text */}
-              <div className="text-xl text-white/90 font-light tracking-wide">
+              {/* Enhanced Genie text with breathing effect */}
+              <motion.div 
+                className="text-xl text-white/90 font-light tracking-wide"
+                animate={{
+                  opacity: [0.9, 1, 0.9],
+                  scale: [1, 1.01, 1]
+                }}
+                transition={{
+                  duration: 4,
+                  repeat: Infinity,
+                  ease: [0.37, 0, 0.63, 1]
+                }}
+                style={{
+                  textShadow: "0 0 10px rgba(255,255,255,0.3)"
+                }}
+              >
                 Genie
-              </div>
+              </motion.div>
             </div>
           </motion.div>
           
-          {/* Background gradient overlay */}
+          {/* Enhanced background gradient overlay */}
           <motion.div 
             className="absolute inset-0 z-25"
             initial={{ opacity: 0 }}
@@ -448,7 +571,7 @@ export default function LoadingAnimation() {
               background: "linear-gradient(135deg, rgba(188,212,255,0.4) 0%, rgba(222,187,255,0.3) 50%, rgba(252,187,227,0.2) 100%)",
             }}
           >
-            {/* Floating light particles - only render on client */}
+            {/* Enhanced floating light particles with smoother movements */}
             {isMounted && floatingParticles.map((particle) => (
               <motion.div 
                 key={particle.id}
@@ -456,7 +579,8 @@ export default function LoadingAnimation() {
                 style={{
                   width: particle.size,
                   height: particle.size,
-                  filter: "blur(8px)"
+                  filter: "blur(10px)",
+                  boxShadow: "0 0 20px rgba(255,255,255,0.2)"
                 }}
                 initial={{
                   x: `${particle.initialX}%`,
@@ -467,33 +591,36 @@ export default function LoadingAnimation() {
                   x: [
                     `${particle.initialX}%`, 
                     `${particle.midX}%`, 
-                    `${particle.endX}%`
+                    `${particle.endX}%`,
+                    `${particle.initialX}%`
                   ],
                   y: [
                     `${particle.initialY}%`, 
                     `${particle.midY}%`, 
-                    `${particle.endY}%`
+                    `${particle.endY}%`,
+                    `${particle.initialY}%`
                   ],
-                  opacity: [0, 0.4, 0],
-                  scale: [0.8, 1.2, 0.8]
+                  opacity: [0, 0.5, 0.3, 0],
+                  scale: [0.8, 1.3, 1.1, 0.8]
                 }}
                 transition={{
-                  duration: particle.duration,
+                  duration: particle.duration * 1.2,
                   delay: particle.delay,
-                  ease: "easeInOut",
-                  times: [0, 0.5, 1]
+                  ease: [0.25, 0.46, 0.45, 0.94],
+                  repeat: Infinity,
+                  times: [0, 0.3, 0.7, 1]
                 }}
               />
             ))}
           </motion.div>
           
-          {/* Final white overlay for transition to app */}
+          {/* Enhanced final white overlay for smoother transition to app */}
           <motion.div 
             className="absolute inset-0 z-40"
             initial={{ opacity: 0 }}
             animate={overlayControls}
             style={{
-              background: "radial-gradient(circle, rgba(255,255,255,0) 0%, rgba(255,255,255,1) 100%)"
+              background: "radial-gradient(circle, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 70%, rgba(255,255,255,1) 100%)"
             }}
           />
         </motion.div>

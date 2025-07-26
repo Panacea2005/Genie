@@ -44,9 +44,12 @@ export default function GradientSphere({ colors }: GradientSphereProps) {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // Set canvas dimensions with a larger size
+    // Set canvas dimensions with responsive sizing
     const setCanvasDimensions = () => {
-      const size = Math.min(window.innerWidth * 0.9, 700)
+      const isMobile = window.innerWidth < 640
+      const maxSize = isMobile ? 400 : 700
+      const percentage = isMobile ? 0.7 : 0.9
+      const size = Math.min(window.innerWidth * percentage, maxSize)
       canvas.width = size
       canvas.height = size
     }
@@ -230,7 +233,10 @@ export default function GradientSphere({ colors }: GradientSphereProps) {
       <canvas 
         ref={canvasRef} 
         className="max-w-full h-auto"
-        style={{ filter: "blur(8px)", maxWidth: "90%" }}
+        style={{ 
+          filter: typeof window !== 'undefined' && window.innerWidth < 640 ? "blur(6px)" : "blur(8px)", 
+          maxWidth: typeof window !== 'undefined' && window.innerWidth < 640 ? "80%" : "90%" 
+        }}
       />
       
       {/* Dynamic background glow based on color theme */}

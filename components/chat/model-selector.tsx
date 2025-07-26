@@ -15,16 +15,28 @@ const ModelSelector = ({
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   
-  const models = [
+  interface Model {
+    id: string;
+    name: string;
+    tone: string;
+    backend: string;
+    description: string;
+  }
+
+  const models: Model[] = [
     { 
       id: "llama3-70b-8192", 
       name: "Lyra",
-      tone: "#818cf8"
+      tone: "#818cf8",
+      backend: "Groq Cloud",
+      description: "Fast, cloud-hosted RAG"
     },
     { 
       id: "meta-llama/llama-4-maverick-17b-128e-instruct", 
       name: "Solace",
-      tone: "#a78bfa"
+      tone: "#a78bfa",
+      backend: "Local RAG",
+      description: "Private, runs on your device"
     }
   ];
   
@@ -95,7 +107,7 @@ const ModelSelector = ({
             className={`absolute top-full mt-1 ${position === "right" ? "right-0" : "left-0"} z-50
                        bg-white/90 backdrop-blur-md rounded-2xl border border-gray-100
                        shadow-[0_8px_30px_rgba(0,0,0,0.04)]`}
-            style={{ minWidth: '160px' }}
+            style={{ minWidth: '220px' }}
           >
             <div className="p-1">
               {models.map((model) => (
@@ -112,34 +124,40 @@ const ModelSelector = ({
                   whileHover={{ x: 2 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="flex items-center gap-3">
-                    {/* Model color */}
-                    <div className="relative">
-                      <div
-                        className="w-2 h-2 rounded-full"
-                        style={{ backgroundColor: model.tone }}
-                      />
-                      {selectedModel === model.id && (
-                        <motion.div
-                          className="absolute inset-0 rounded-full"
-                          initial={{ scale: 1 }}
-                          animate={{ scale: 2, opacity: 0 }}
-                          transition={{ duration: 0.4 }}
-                          style={{ 
-                            backgroundColor: model.tone,
-                            opacity: 0.2
-                          }}
+                  <div className="flex items-center justify-between mb-0.5">
+                    <div className="flex items-center gap-3">
+                      {/* Model color */}
+                      <div className="relative">
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: model.tone }}
                         />
-                      )}
+                        {selectedModel === model.id && (
+                          <motion.div
+                            className="absolute inset-0 rounded-full"
+                            initial={{ scale: 1 }}
+                            animate={{ scale: 2, opacity: 0 }}
+                            transition={{ duration: 0.4 }}
+                            style={{ 
+                              backgroundColor: model.tone,
+                              opacity: 0.2
+                            }}
+                          />
+                        )}
+                      </div>
+                      <span className={`text-sm font-medium transition-colors
+                                        ${selectedModel === model.id 
+                                          ? 'text-gray-900' 
+                                          : 'text-gray-700'}`}>
+                        {model.name}
+                      </span>
                     </div>
-                    
-                    {/* Model name */}
-                    <span className={`text-sm font-light transition-colors
-                                    ${selectedModel === model.id 
-                                      ? 'text-gray-900' 
-                                      : 'text-gray-600'}`}>
-                      {model.name}
+                    <span className="text-xs text-gray-400 font-light">
+                      {model.backend}
                     </span>
+                  </div>
+                  <div className="text-xs text-gray-400 font-light mt-0.5">
+                    {model.description}
                   </div>
                 </motion.button>
               ))}
