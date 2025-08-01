@@ -11,6 +11,10 @@ import logging
 import warnings
 import multiprocessing
 
+# Windows multiprocessing support
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
+
 # Suppress TensorFlow warnings
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -88,7 +92,7 @@ class EmbeddingManager:
     def encode(self, texts: Union[str, List[str]], 
                batch_size: int = None,
                show_progress_bar: bool = False) -> np.ndarray:
-        """Encode texts to embeddings with optimized batching"""
+        """Encode texts to embeddings with optimized batching and maximum CPU utilization"""
         if isinstance(texts, str):
             texts = [texts]
         
@@ -97,42 +101,104 @@ class EmbeddingManager:
             batch_size = self.config.system.embedding_batch_size
         
         try:
-            # For large batches on CPU, try to use all cores efficiently
-            if self.device == 'cpu' and len(texts) > batch_size:
-                # Set PyTorch threads for better CPU utilization
-                import torch
+            # For CPU: Always use multiprocessing pool for maximum CPU utilization
+            if self.device == 'cpu' and len(texts) > 50:  # Use multiprocessing for any reasonable batch
+                # Set PyTorch threads to use all available cores
                 torch.set_num_threads(self.config.system.max_workers)
-                logger.info(f"Set PyTorch to use {self.config.system.max_workers} threads")
-            
-            # Standard encoding with optimizations
-            if self.device == 'cuda':
+                logger.info(f"🚀 Optimizing for CPU: Using {self.config.system.max_workers} threads")
+                
+                # Start multiprocessing pool for encoding with Windows safety
+                if not hasattr(self, 'pool') or self.pool is None:
+                    logger.info(f"🔧 Starting multiprocess pool with {self.config.system.max_workers} workers...")
+                    try:
+                        # Windows-safe multiprocessing
+                        import sys
+                        if sys.platform.startswith('win'):
+                            # Use fewer workers on Windows to avoid issues
+                            worker_count = min(self.config.system.max_workers, multiprocessing.cpu_count() - 1)
+                            logger.info(f"Windows detected: Using {worker_count} workers for stability")
+                        else:
+                            worker_count = self.config.system.max_workers
+                        
+                        self.pool = self.embedding_model.start_multi_process_pool(
+                            target_devices=['cpu'] * worker_count
+                        )
+                        logger.info("✅ Multiprocess pool started")
+                    except Exception as mp_error:
+                        logger.warning(f"Multiprocessing pool failed: {mp_error}")
+                        logger.info("Falling back to single-threaded encoding with max CPU optimization")
+                        self.pool = None
+                
+                # Use the pool for encoding if available
+                if self.pool is not None:
+                    embeddings = self.embedding_model.encode_multi_process(
+                        texts,
+                        pool=self.pool,
+                        batch_size=min(batch_size, len(texts) // worker_count + 1),  # Optimize chunk size
+                        chunk_size=min(batch_size, len(texts) // worker_count + 1),
+                        normalize_embeddings=True
+                    )
+                    logger.info(f"✅ Encoded {len(texts)} texts using multiprocess pool with {worker_count} workers")
+                else:
+                    # Fallback to single-threaded with max optimization
+                    torch.set_num_threads(self.config.system.max_workers)
+                    logger.info(f"🔧 Using fallback single-threaded encoding with {self.config.system.max_workers} threads")
+                    embeddings = self.embedding_model.encode(
+                        texts,
+                        batch_size=min(batch_size, 64),  # Smaller batches for better CPU utilization
+                        show_progress_bar=show_progress_bar,
+                        convert_to_numpy=True,
+                        normalize_embeddings=True,
+                        device=self.device
+                    )
+                    logger.info(f"✅ CPU encoded {len(texts)} texts (fallback with max threads)")
+                
+            # For GPU or small batches: Use standard encoding with optimizations
+            elif self.device == 'cuda':
+                # GPU encoding with larger batch sizes
                 embeddings = self.embedding_model.encode(
                     texts,
-                    batch_size=batch_size,
+                    batch_size=min(batch_size * 2, 2048),  # Use larger batches on GPU
                     show_progress_bar=show_progress_bar,
-                    convert_to_tensor=True,  # <-- Keep as GPU tensor
+                    convert_to_tensor=True,  # Keep as GPU tensor during processing
                     normalize_embeddings=True,
                     device=self.device
                 )
                 # Only convert to CPU numpy at the end
                 embeddings = embeddings.cpu().numpy()
+                logger.info(f"✅ GPU encoded {len(texts)} texts")
             else:
+                # Small CPU batches - still optimize for maximum CPU usage
+                torch.set_num_threads(self.config.system.max_workers)
+                logger.info(f"🔧 Small batch CPU encoding: {len(texts)} texts with {self.config.system.max_workers} threads")
                 embeddings = self.embedding_model.encode(
                     texts,
-                    batch_size=batch_size,
+                    batch_size=min(batch_size, 32),  # Smaller batches for better parallelization
                     show_progress_bar=show_progress_bar,
                     convert_to_numpy=True,
                     normalize_embeddings=True,
-                    device=self.device,
-                    num_workers=self.config.system.max_workers
+                    device=self.device
                 )
+                logger.info(f"✅ CPU encoded {len(texts)} texts (small batch with {self.config.system.max_workers} threads)")
             
             return embeddings.astype('float32')
             
         except Exception as e:
             logger.error(f"Error encoding texts: {e}")
+            # Fallback to standard encoding if multiprocessing fails
+            if "pool" in str(e).lower() or "process" in str(e).lower():
+                logger.warning("Multiprocessing failed, falling back to standard encoding")
+                embeddings = self.embedding_model.encode(
+                    texts,
+                    batch_size=batch_size // 2,
+                    show_progress_bar=show_progress_bar,
+                    convert_to_numpy=True,
+                    normalize_embeddings=True,
+                    device=self.device
+                )
+                return embeddings.astype('float32')
             # Fallback to smaller batch size if memory error
-            if "out of memory" in str(e).lower() and batch_size > 1:
+            elif "out of memory" in str(e).lower() and batch_size > 1:
                 logger.warning(f"Reducing batch size from {batch_size} to {batch_size // 2}")
                 return self.encode(texts, batch_size=batch_size // 2, show_progress_bar=show_progress_bar)
             raise
@@ -185,6 +251,10 @@ class EmbeddingManager:
         if hasattr(self, 'pool') and self.pool is not None:
             try:
                 self.embedding_model.stop_multi_process_pool(self.pool)
-                logger.info("Stopped multi-process pool")
-            except:
-                pass
+                logger.info("🔧 Stopped multiprocess pool")
+            except Exception as e:
+                logger.warning(f"Error stopping multiprocess pool: {e}")
+    
+    def cleanup(self):
+        """Manually cleanup resources"""
+        self.__del__()

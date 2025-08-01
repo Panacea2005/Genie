@@ -8,12 +8,17 @@ both CLI and API interfaces for interacting with your AI companion.
 
 import asyncio
 import logging
+import multiprocessing
 from pathlib import Path
 import sys
 from typing import Dict, Any, Optional, List
 import argparse
 import json
 from datetime import datetime
+
+# Windows multiprocessing support
+if __name__ == '__main__':
+    multiprocessing.freeze_support()
 
 # Add project root to path
 project_root = Path(__file__).parent
@@ -67,7 +72,8 @@ class GenieAI:
         Initialize Genie AI system
         
         Args:
-            skip_data_loading: If True, load existing indexes. If False, rebuild from scratch.
+            skip_data_loading: DEPRECATED - System now automatically detects existing indexes.
+                             Always uses smart index checking to prevent unnecessary rebuilds.
         """
         logger.info("="*60)
         logger.info(" Initializing Genie AI Companion System ")
@@ -101,12 +107,13 @@ class GenieAI:
             if self.web_search:
                 self.orchestrator.retrieval_agent.set_web_search(self.web_search)
             
-            # Handle data loading based on flag
-            if skip_data_loading:
-                logger.info("Loading existing indexes...")
+            # ALWAYS use smart index checking instead of the skip_data_loading flag
+            # This prevents unnecessary rebuilds and uses existing indexes intelligently
+            if self._check_indexes_exist():
+                logger.info("🔍 Found existing indexes - loading what's available...")
                 self._load_existing_indexes()
             else:
-                logger.info("Building indexes from scratch...")
+                logger.info("🔨 No indexes found - building from scratch...")
                 self._build_indexes_from_scratch()
             
             logger.info("Genie AI initialized successfully!")
@@ -126,67 +133,151 @@ class GenieAI:
         }
     
     def _check_indexes_exist(self) -> bool:
-        """Check if all required indexes exist"""
+        """Check if any indexes exist - don't require ALL to exist"""
         paths = self._get_index_paths()
-        required_files = [paths["vector_faiss"], paths["vector_pkl"], paths["bm25"]]
-        return all(path.exists() for path in required_files)
+        
+        # Check which indexes exist
+        vector_exists = paths["vector_faiss"].exists() and paths["vector_pkl"].exists()
+        bm25_exists = paths["bm25"].exists()
+        graph_exists = paths["graph"].exists()
+        
+        logger.info(f"Index status check:")
+        logger.info(f"  Vector store: {'✅' if vector_exists else '❌'}")
+        logger.info(f"  BM25 index: {'✅' if bm25_exists else '❌'}")
+        logger.info(f"  Knowledge graph: {'✅' if graph_exists else '❌'}")
+        
+        # Return True if ANY index exists (we can load partial indexes)
+        any_exist = vector_exists or bm25_exists or graph_exists
+        
+        if any_exist:
+            logger.info("Found existing indexes - will load what's available")
+        else:
+            logger.info("No indexes found - will build from scratch")
+            
+        return any_exist
     
     def _load_existing_indexes(self):
-        """Load existing indexes"""
+        """Load existing indexes - handle partial index availability gracefully"""
         paths = self._get_index_paths()
         
-        if not self._check_indexes_exist():
-            logger.warning("Some indexes are missing. Building from scratch...")
-            self._build_indexes_from_scratch()
-            return
+        # Check which indexes exist
+        vector_exists = paths["vector_faiss"].exists() and paths["vector_pkl"].exists()
+        bm25_exists = paths["bm25"].exists()
+        graph_exists = paths["graph"].exists()
         
-        try:
-            # Load vector store
-            vector_base_path = str(paths["vector_faiss"].parent / "mental_health_index")
-            self.vector_store.load_index(vector_base_path)
-            logger.info(f"Loaded knowledge base with {len(self.vector_store.documents):,} documents")
-            
-            # Load BM25 index
+        any_loaded = False
+        
+        # Load vector store if available
+        if vector_exists:
+            try:
+                vector_base_path = str(paths["vector_faiss"].parent / "mental_health_index")
+                self.vector_store.load_index(vector_base_path)
+                logger.info(f"✅ Loaded vector store with {len(self.vector_store.documents):,} documents")
+                any_loaded = True
+            except Exception as e:
+                logger.error(f"❌ Failed to load vector store: {e}")
+                # Don't rebuild everything, just mark as unavailable
+                logger.info("Vector search will be unavailable until rebuilt")
+        else:
+            logger.info("🔄 Vector store not found - will need to build")
+
+        # Load BM25 index if available
+        if bm25_exists:
             try:
                 self.bm25_search.load(str(paths["bm25"]))
                 bm25_count = len(self.bm25_search.documents) if hasattr(self.bm25_search, 'documents') else 0
-                logger.info(f"Loaded BM25 index with {bm25_count:,} documents")
+                logger.info(f"✅ Loaded BM25 index with {bm25_count:,} documents")
+                any_loaded = True
             except Exception as e:
-                logger.error(f"Failed to load BM25 index: {e}")
-                logger.info("BM25 search will be unavailable")
-            
-            # Load graph store if it exists
+                logger.error(f"❌ Failed to load BM25 index: {e}")
+                logger.info("BM25 search will be unavailable until rebuilt")
+        else:
+            logger.info("🔄 BM25 index not found - will need to build")
+
+        # Load graph store if available
+        if graph_exists:
             try:
-                if paths["graph"].exists():
-                    # Use just the base path without extension for graph store
-                    graph_base_path = str(paths["graph"]).replace('.pkl', '')
-                    self.graph_store.load(graph_base_path)
-                    graph_count = len(self.graph_store.graph.nodes()) if hasattr(self.graph_store, 'graph') else 0
-                    logger.info(f"Loaded knowledge graph with {graph_count:,} nodes")
-                else:
-                    logger.info("Knowledge graph file not found - graph search will be unavailable")
+                graph_base_path = str(paths["graph"]).replace('.pkl', '')
+                self.graph_store.load(graph_base_path)
+                graph_count = len(self.graph_store.graph.nodes()) if hasattr(self.graph_store, 'graph') else 0
+                logger.info(f"✅ Loaded knowledge graph with {graph_count:,} nodes")
+                any_loaded = True
             except Exception as e:
-                logger.error(f"Failed to load knowledge graph: {e}")
-                logger.info("Knowledge graph search will be unavailable")
+                logger.error(f"❌ Failed to load knowledge graph: {e}")
+                logger.info("Knowledge graph search will be unavailable until rebuilt")
+        else:
+            logger.info("🔄 Knowledge graph not found - will need to build")
+
+        # Only rebuild missing indexes, not everything
+        missing_indexes = []
+        if not vector_exists:
+            missing_indexes.append("vector store")
+        if not bm25_exists:
+            missing_indexes.append("BM25")
+        if not graph_exists:
+            missing_indexes.append("knowledge graph")
+        
+        if missing_indexes:
+            logger.info(f"🔧 Need to build missing indexes: {', '.join(missing_indexes)}")
+            self._build_missing_indexes(missing_indexes)
+        elif any_loaded:
+            logger.info("🎉 All available indexes loaded successfully!")
+        else:
+            logger.warning("⚠️ No indexes could be loaded - building from scratch")
+            self._build_indexes_from_scratch()
+    
+    def _build_missing_indexes(self, missing_indexes: List[str]):
+        """Build only the missing indexes instead of rebuilding everything"""
+        try:
+            logger.info(f"🔧 Building missing indexes: {', '.join(missing_indexes)}")
+            
+            # Load data only if we need to build indexes
+            logger.info("📚 Loading training data for missing indexes...")
+            data_loader = DataLoader(config)
+            documents = data_loader.load_all_data()
+            
+            if not documents:
+                logger.warning("No training data found! Cannot build missing indexes.")
+                return
+            
+            logger.info(f"📊 Loaded {len(documents)} documents for index building")
+            
+            # Build only the missing indexes using the optimized indexer
+            indexer = DataIndexer(config)
+            
+            # Set the components based on what's missing
+            if "vector store" in missing_indexes:
+                indexer.vector_store = self.vector_store
+            if "BM25" in missing_indexes:
+                indexer.bm25_search = self.bm25_search  
+            if "knowledge graph" in missing_indexes:
+                indexer.graph_store = self.graph_store
+            
+            # Use the smart indexer that can build specific indexes
+            indexer.build_specific_indexes(documents, missing_indexes)
+            
+            logger.info("✅ Missing indexes built successfully!")
             
         except Exception as e:
-            logger.error(f"Error loading indexes: {e}")
-            logger.info("Attempting to rebuild indexes...")
+            logger.error(f"❌ Error building missing indexes: {e}")
+            logger.warning("Falling back to full rebuild...")
             self._build_indexes_from_scratch()
     
     def _build_indexes_from_scratch(self):
-        """Build all indexes from training data"""
+        """Build all indexes from training data - only when truly needed"""
         try:
-            # Clear any existing partial indexes
-            logger.info("Clearing existing indexes...")
+            logger.info("🔨 Building ALL indexes from scratch...")
+            
+            # Only clear indexes if we're doing a complete rebuild
+            logger.info("🧹 Clearing existing partial indexes...")
             paths = self._get_index_paths()
-            for path in paths.values():
+            for path_name, path in paths.items():
                 if path.exists():
-                    logger.info(f"Removing {path}")
+                    logger.info(f"  Removing {path}")
                     path.unlink()
             
             # Load data
-            logger.info("Loading training data...")
+            logger.info("📚 Loading training data...")
             data_loader = DataLoader(config)
             documents = data_loader.load_all_data()
             
@@ -197,24 +288,24 @@ class GenieAI:
                 logger.warning(f"  - {config.data.data_dir}")
                 return
             
-            logger.info(f"Loaded {len(documents)} documents")
+            logger.info(f"📊 Loaded {len(documents)} documents")
             
-            # Build indexes
-            logger.info("Building search indexes...")
+            # Build indexes using the optimized indexer
+            logger.info("🏗️ Building search indexes with full parallelization...")
             indexer = DataIndexer(config)
             indexer.vector_store = self.vector_store
             indexer.bm25_search = self.bm25_search
             indexer.graph_store = self.graph_store
             indexer.build_all_indexes(documents)
             
-            logger.info("Indexes built successfully")
+            logger.info("✅ All indexes built successfully")
             
             # IMPORTANT: Reload the indexes after building
-            logger.info("Loading newly built indexes...")
+            logger.info("🔄 Loading newly built indexes...")
             self._load_existing_indexes()
             
         except Exception as e:
-            logger.error(f"Error building indexes: {e}", exc_info=True)
+            logger.error(f"❌ Error building indexes: {e}", exc_info=True)
             logger.warning("System will operate with limited retrieval capabilities")
             logger.warning("You may need to check:")
             logger.warning("  1. Training data is available")
@@ -421,7 +512,7 @@ class GenieAI:
                     sources = response.get('sources', [])
                     if sources and len(sources) > 0:
                         print("\nSources:")
-                        for i, source in enumerate(sources[:3], 1):
+                        for i, source in enumerate(sources, 1):  # Remove limit to show all sources
                             print(f"  [{i}] {source.get('metadata', {}).get('source', 'Unknown source')}")
                 
             except KeyboardInterrupt:

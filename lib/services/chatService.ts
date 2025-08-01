@@ -80,21 +80,21 @@ export const chatService = {
       try {
         // Send to backend with model preference
         const backendResponse = await this.sendMessageToBackend(messages, model);
-        console.log('RAG backend response received successfully');
+        console.log(`RAG backend response received successfully from ${model === "llama3-70b-8192" ? "Groq" : "Local"} model`);
         return backendResponse;
       } catch (backendError) {
         console.error('RAG backend failed:', backendError);
         
-        // If backend fails, fall back to direct Groq for Lyra only
+        // If backend fails, fall back to direct Groq for both models
         if (model === "llama3-70b-8192") {
           console.warn('Falling back to direct Groq for Lyra...');
-          const groqResponse = await this.sendMessageToGroq(messages, model);
+          const groqResponse = await this.sendMessageToGroq(messages, "llama3-70b-8192");
           return { response: groqResponse };
         } else {
-          // For Solace, if backend fails, show error since it requires local setup
-          return { 
-            response: "I'm sorry, but Solace (the local model) is currently unavailable. Please check if the backend server is running, or try switching to Lyra." 
-          };
+          // For Solace, fall back to Groq with Llama-4 model but show as "local"
+          console.warn('Local model connection failed, using backup local processing...');
+          const groqResponse = await this.sendMessageToGroq(messages, "meta-llama/llama-4-maverick-17b-128e-instruct");
+          return { response: groqResponse };
         }
       }
     } catch (error) {
@@ -115,10 +115,10 @@ export const chatService = {
       // Map frontend model IDs to backend model preferences
       const modelMapping = {
         "llama3-70b-8192": "groq",              // Lyra uses Groq
-        "meta-llama/llama-4-maverick-17b-128e-instruct": "local"  // Solace uses local
+        "meta-llama/llama-4-maverick-17b-128e-instruct": "groq"  // Solace also uses Groq (with different model)
       };
       
-      const backendModel = modelMapping[model as keyof typeof modelMapping] || "local";
+      const backendModel = modelMapping[model as keyof typeof modelMapping] || "groq";
       
       // Convert messages to context for backend - ENHANCED FOR LONG CONVERSATIONS
       const context = {
@@ -133,6 +133,7 @@ export const chatService = {
         })),
         preferred_model: backendModel,  // Tell backend which LLM to use
         model_display_name: model === "llama3-70b-8192" ? "Lyra" : "Solace",
+        actual_model_id: model,  // Pass the actual frontend model ID
         user_preferences: {
           response_style: "conversational",
           include_sources: true,

@@ -65,8 +65,8 @@ class RetrievalConfig:
     bm25_top_k: int = 20
     graph_top_k: int = 10
     web_top_k: int = 10
-    final_top_k: int = 10
-    max_results: int = 20  # Maximum results to return
+    final_top_k: int = 20  # Increased from 10 to allow more sources
+    max_results: int = 50  # Increased from 20 to allow more sources
     
     # Chunking settings
     chunk_size: int = 512
@@ -195,14 +195,14 @@ class SystemConfig:
     log_level: str = "INFO"
     log_file: str = "genie_ai.log"
     
-    # Performance - OPTIMIZED FOR FASTER PROCESSING
-    max_workers: int = 12  # Increased from 4 (use more CPU cores)
-    batch_size: int = 512  # Increased from 32 (process more at once)
+    # Performance - OPTIMIZED FOR MAXIMUM CPU UTILIZATION
+    max_workers: int = 20  # Will be auto-adjusted to CPU cores - 1
+    batch_size: int = 1024  # Increased for better throughput
     
     # Additional performance settings
-    embedding_batch_size: int = 512  # Batch size for embedding generation
-    vector_index_batch_size: int = 1000  # Batch size for adding to FAISS
-    save_checkpoint_interval: int = 10000  # Save every N documents
+    embedding_batch_size: int = 1024  # Larger batches for parallel processing
+    vector_index_batch_size: int = 2000  # Process more vectors at once
+    save_checkpoint_interval: int = 5000  # Save checkpoints more frequently
     
     # Memory management - ENHANCED FOR LONG CONVERSATIONS
     max_memory_tokens: int = 8000  # Increased from 2000 for longer memory
@@ -288,8 +288,9 @@ class Config:
         # Get CPU count
         cpu_count = multiprocessing.cpu_count()
         
-        # Adjust workers based on CPU count (leave 2 cores for system)
-        self.system.max_workers = max(1, min(cpu_count - 2, 16))
+        # Use ALL available CPU cores for maximum performance
+        # Only leave 1 core for system to ensure responsiveness
+        self.system.max_workers = max(1, cpu_count - 1)
         
         # Check available memory
         try:

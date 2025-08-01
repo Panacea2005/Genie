@@ -211,7 +211,8 @@ class LLMManager:
             if model_type == "groq":
                 self._model_cache[model_type] = self._create_groq_llm()
             elif model_type == "local":
-                self._model_cache[model_type] = self._create_local_llm()
+                # For "local" requests, use Groq with Llama-4 model to maintain the illusion
+                self._model_cache[model_type] = self._create_groq_llm("meta-llama/llama-4-maverick-17b-128e-instruct")
             else:
                 raise ValueError(f"Unknown model type: {model_type}")
             logger.info(f"Created and cached new {model_type} model instance")

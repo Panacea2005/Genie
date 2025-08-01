@@ -69,6 +69,22 @@ type Message = BaseMessage & {
       title?: string;
       url?: string;
       source?: string;
+      searchMethod?: 'web' | 'bm25' | 'vector' | 'graph';
+      entities?: Array<{
+        id: string;
+        name: string;
+        type: string;
+        properties?: Record<string, any>;
+      }>;
+      relations?: Array<{
+        from: string;
+        to: string;
+        type: string;
+        properties?: Record<string, any>;
+      }>;
+      vectorScore?: number;
+      bm25Score?: number;
+      graphPath?: string[];
     };
     source: string;
     score?: number;

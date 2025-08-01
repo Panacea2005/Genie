@@ -11,12 +11,53 @@ interface TestCase {
 
 interface TestResultRow {
   testCase: string;
-  groq_confidence: number | string;
-  local_confidence: number | string;
-  groq_time: number | string;
-  local_time: number | string;
-  groq_total: number | string;
-  local_total: number | string;
+  lyra_confidence: number | string;
+  solace_confidence: number | string;
+  lyra_time: number | string;
+  solace_time: number | string;
+  lyra_total: number | string;
+  solace_total: number | string;
+}
+
+// Enhanced scoring algorithm with source relevance focus
+function calculateComprehensiveScore(
+  confidence: number,
+  responseTime: number,
+  sourceRelevance: number,
+  responseLength: number
+): number {
+  // Normalize confidence (0-1 to 0-100)
+  const confidenceScore = confidence * 100;
+  
+  // Normalize response time (faster = higher score, with diminishing returns)
+  // Optimal time: 1-3 seconds, penalty for too fast (<0.5s) or too slow (>10s)
+  let timeScore = 100;
+  if (responseTime < 0.5) {
+    timeScore = 60 + (responseTime * 80); // Too fast = lower quality
+  } else if (responseTime <= 3) {
+    timeScore = 100 - ((responseTime - 0.5) * 10); // Optimal range
+  } else if (responseTime <= 10) {
+    timeScore = 75 - ((responseTime - 3) * 5); // Acceptable range
+  } else {
+    timeScore = Math.max(20, 25 - ((responseTime - 10) * 2)); // Slow penalty
+  }
+  
+  // Source relevance score (0-100)
+  // Higher relevance = better score
+  const relevanceScore = sourceRelevance * 100;
+  
+  // Weighted combination (scientific approach)
+  // Confidence: 40% (most important for accuracy)
+  // Time: 30% (important for user experience)
+  // Source Relevance: 30% (reliability and quality of sources)
+  
+  const finalScore = (
+    (confidenceScore * 0.4) +
+    (timeScore * 0.3) +
+    (relevanceScore * 0.3)
+  );
+  
+  return Math.round(finalScore);
 }
 
 async function callBackend(message: string, model: string): Promise<any> {
@@ -49,32 +90,43 @@ async function callBackend(message: string, model: string): Promise<any> {
     const endTime = Date.now();
     const clientTime = (endTime - startTime) / 1000; // Convert to seconds
     
-    // Calculate a simple score based on response quality
+    // Use the actual processing time from backend if available, otherwise use client time
+    const actualTime = data.processing_time || clientTime;
+    
+    // Calculate comprehensive score using the enhanced algorithm
     let totalScore = 0;
     if (data.response && typeof data.response === 'string') {
       const response = data.response;
-      // Score based on response length (not too short, not too long)
-      if (response.length > 50 && response.length < 2000) totalScore += 30;
-      // Score based on confidence
-      if (data.confidence && typeof data.confidence === 'number') {
-        totalScore += data.confidence * 40;
-      }
-      // Score based on response time (faster is better, but not too fast)
-      if (data.processing_time && typeof data.processing_time === 'number') {
-        if (data.processing_time < 5) totalScore += 20;
-        else if (data.processing_time < 15) totalScore += 10;
-        else if (data.processing_time < 30) totalScore += 5;
-      }
-      // Bonus for having sources
+      const confidence = data.confidence || 0;
+      
+      // Calculate source relevance based on number and quality of sources
+      let sourceRelevance = 0.5; // Default relevance
       if (data.sources && Array.isArray(data.sources) && data.sources.length > 0) {
-        totalScore += 10;
+        // Higher relevance for more sources, but with diminishing returns
+        sourceRelevance = Math.min(1.0, 0.5 + (data.sources.length * 0.1));
+        
+        // Additional relevance based on source quality indicators
+        if (data.sources.some((source: any) => source.title && source.url)) {
+          sourceRelevance += 0.2;
+        }
+        if (data.sources.some((source: any) => source.snippet && source.snippet.length > 50)) {
+          sourceRelevance += 0.1;
+        }
+        sourceRelevance = Math.min(1.0, sourceRelevance);
       }
+      
+      totalScore = calculateComprehensiveScore(
+        confidence,
+        actualTime,
+        sourceRelevance,
+        response.length
+      );
     }
     
     return {
       ...data,
-      processing_time: data.processing_time || clientTime,
-      total_score: Math.round(totalScore),
+      processing_time: actualTime,
+      total_score: totalScore,
       client_time: clientTime
     };
   } catch (error) {
@@ -96,64 +148,80 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'test_cases must be an array' }, { status: 400 });
     }
     
+    // Validate test case format
+    for (let i = 0; i < test_cases.length; i++) {
+      const testCase = test_cases[i];
+      if (!testCase.name || !testCase.message) {
+        return NextResponse.json({ 
+          error: `Test case ${i + 1} must have 'name' and 'message' fields` 
+        }, { status: 400 });
+      }
+      if (typeof testCase.name !== 'string' || typeof testCase.message !== 'string') {
+        return NextResponse.json({ 
+          error: `Test case ${i + 1}: 'name' and 'message' must be strings` 
+        }, { status: 400 });
+      }
+    }
+    
+    console.log(`Starting model comparison test with ${test_cases.length} test cases`);
     const results: TestResultRow[] = [];
     
     for (const testCase of test_cases) {
       const { name, message } = testCase;
       console.log(`Testing case: ${name}`);
       
-      // Call Groq model
-      let groqRes;
+      // Call Lyra (Groq Llama-3.3) model
+      let lyraRes;
       try {
-        console.log(`Calling Groq for: ${name}`);
-        groqRes = await callBackend(message, 'groq');
-        console.log(`Groq result for ${name}:`, {
-          confidence: groqRes.confidence,
-          processing_time: groqRes.processing_time,
-          total_score: groqRes.total_score,
-          error: groqRes.error
+        console.log(`Calling Lyra (Groq Llama-3.3) for: ${name}`);
+        lyraRes = await callBackend(message, 'groq');
+        console.log(`Lyra result for ${name}:`, {
+          confidence: lyraRes.confidence,
+          processing_time: lyraRes.processing_time,
+          total_score: lyraRes.total_score,
+          error: lyraRes.error
         });
       } catch (e) {
-        console.error(`Groq error for ${name}:`, e);
-        groqRes = { 
+        console.error(`Lyra error for ${name}:`, e);
+        lyraRes = { 
           error: true, 
           confidence: '-', 
           processing_time: '-', 
           total_score: '-',
-          response: 'Error: Groq failed'
+          response: 'Error: Lyra failed'
         };
       }
       
-      // Call Local model
-      let localRes;
+      // Call Solace (Groq Llama-4) model
+      let solaceRes;
       try {
-        console.log(`Calling Local for: ${name}`);
-        localRes = await callBackend(message, 'local');
-        console.log(`Local result for ${name}:`, {
-          confidence: localRes.confidence,
-          processing_time: localRes.processing_time,
-          total_score: localRes.total_score,
-          error: localRes.error
+        console.log(`Calling Solace (Groq Llama-4) for: ${name}`);
+        solaceRes = await callBackend(message, 'local'); // Backend maps 'local' to Groq Llama-4
+        console.log(`Solace result for ${name}:`, {
+          confidence: solaceRes.confidence,
+          processing_time: solaceRes.processing_time,
+          total_score: solaceRes.total_score,
+          error: solaceRes.error
         });
       } catch (e) {
-        console.error(`Local error for ${name}:`, e);
-        localRes = { 
+        console.error(`Solace error for ${name}:`, e);
+        solaceRes = { 
           error: true, 
           confidence: '-', 
           processing_time: '-', 
           total_score: '-',
-          response: 'Error: Local failed'
+          response: 'Error: Solace failed'
         };
       }
       
       results.push({
         testCase: name,
-        groq_confidence: groqRes.error ? '-' : (groqRes.confidence || '-'),
-        local_confidence: localRes.error ? '-' : (localRes.confidence || '-'),
-        groq_time: groqRes.error ? '-' : (groqRes.processing_time || '-'),
-        local_time: localRes.error ? '-' : (localRes.processing_time || '-'),
-        groq_total: groqRes.error ? '-' : (groqRes.total_score || '-'),
-        local_total: localRes.error ? '-' : (localRes.total_score || '-'),
+        lyra_confidence: lyraRes.error ? '-' : (lyraRes.confidence || '-'),
+        solace_confidence: solaceRes.error ? '-' : (solaceRes.confidence || '-'),
+        lyra_time: lyraRes.error ? '-' : (lyraRes.processing_time || '-'),
+        solace_time: solaceRes.error ? '-' : (solaceRes.processing_time || '-'),
+        lyra_total: lyraRes.error ? '-' : (lyraRes.total_score || '-'),
+        solace_total: solaceRes.error ? '-' : (solaceRes.total_score || '-'),
       });
     }
     

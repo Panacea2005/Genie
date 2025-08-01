@@ -239,7 +239,12 @@ export default function Navbar({ currentPage = "home" }: { currentPage?: string 
           Dashboard
         </NavButton>
 
-        {/* Dashboard button - forth */}
+        {/* Model Test button - fourth */}
+        <NavButton href="/model-test" variant="ghost" className="text-xs text-gray-500 font-light">
+          Model Test
+        </NavButton>
+
+        {/* Meditation button - fifth */}
         <NavButton href="/meditation" variant="ghost" className="text-xs text-gray-500 font-light">
           Meditation
         </NavButton>

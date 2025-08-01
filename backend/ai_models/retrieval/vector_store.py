@@ -86,21 +86,24 @@ class VectorStore:
         initial_cpu_percent = psutil.cpu_percent(interval=1, percpu=True)
         initial_memory = process.memory_info().rss / 1024 / 1024 / 1024  # GB
         
+        # Define chunk_size early to avoid variable scope issues
+        chunk_size = config.system.vector_index_batch_size  # How many to add to FAISS at once
+        
         logger.info("="*80)
         logger.info(f"VECTOR STORE INDEXING - STARTING")
         logger.info("="*80)
         logger.info(f"Total documents to process: {len(documents):,}")
-        logger.info(f"Batch size: {batch_size}")
-        logger.info(f"CPU cores available: {psutil.cpu_count()} (using {config.system.max_workers} workers)")
+        logger.info(f"Embedding batch size: {batch_size}")
+        logger.info(f"Vector index batch size: {chunk_size}")
+        logger.info(f"CPU cores available: {psutil.cpu_count()} (configured: {config.system.max_workers} workers)")
         logger.info(f"Initial RAM usage: {initial_memory:.2f} GB / {psutil.virtual_memory().total / 1024 / 1024 / 1024:.2f} GB")
-        logger.info(f"Embedding model: {self.embedding_manager.embedding_model.device}")
+        logger.info(f"Embedding model device: {self.embedding_manager.embedding_model.device}")
+        logger.info(f"Checkpoint interval: every {config.system.save_checkpoint_interval:,} documents")
         logger.info("="*80)
         
         start_time = time.time()
         
         # Process in chunks to avoid memory issues
-        chunk_size = config.system.vector_index_batch_size  # How many to add to FAISS at once
-        
         all_embeddings = []
         all_ids = []
         
@@ -120,11 +123,12 @@ class VectorStore:
             
             # Monitor CPU usage before encoding
             cpu_before = psutil.cpu_percent(interval=0.1, percpu=True)
-            active_cores = sum(1 for cpu in cpu_before if cpu > 50)
-            logger.info(f"Active CPU cores: {active_cores}/{len(cpu_before)} | CPU usage: {[f'{cpu:.1f}%' for cpu in cpu_before[:8]]}...")
+            active_cores = sum(1 for cpu in cpu_before if cpu > 30)  # Count cores with >30% usage
+            max_cpu = max(cpu_before) if cpu_before else 0
+            logger.info(f"CPU cores active: {active_cores}/{len(cpu_before)} | Peak usage: {max_cpu:.1f}% | Cores: {[f'{cpu:.0f}%' for cpu in cpu_before[:10]]}{'...' if len(cpu_before) > 10 else ''}")
             
             # Generate embeddings
-            logger.info("Generating embeddings...")
+            logger.info("🔥 Generating embeddings with maximum CPU utilization...")
             embed_start = time.time()
             embeddings = self.embedding_manager.encode(texts, 
                                                      show_progress_bar=True,
@@ -134,8 +138,17 @@ class VectorStore:
             # Monitor CPU usage after encoding
             cpu_after = psutil.cpu_percent(interval=0.1, percpu=True)
             avg_cpu = sum(cpu_after) / len(cpu_after)
-            logger.info(f"Embedding generation took {embed_time:.2f}s ({current_batch_size/embed_time:.1f} docs/sec)")
-            logger.info(f"Average CPU usage during encoding: {avg_cpu:.1f}%")
+            peak_cpu = max(cpu_after) if cpu_after else 0
+            cores_utilized = sum(1 for cpu in cpu_after if cpu > 50)  # Count heavily utilized cores
+            logger.info(f"⚡ Embedding completed: {embed_time:.2f}s ({current_batch_size/embed_time:.1f} docs/sec)")
+            logger.info(f"📊 CPU utilization: avg={avg_cpu:.1f}%, peak={peak_cpu:.1f}%, cores_utilized={cores_utilized}/{len(cpu_after)}")
+            
+            # Check if we're getting good CPU utilization
+            if avg_cpu < 70 and cores_utilized < len(cpu_after) * 0.8:
+                logger.warning(f"⚠️  Low CPU utilization detected! Consider checking:")
+                logger.warning(f"   - Close background applications")
+                logger.warning(f"   - Check if multiprocessing is working correctly")
+                logger.warning(f"   - Verify sentence-transformers version supports multiprocessing")
             
             # Normalize embeddings for cosine similarity
             embeddings = embeddings / np.linalg.norm(embeddings, axis=1, keepdims=True)

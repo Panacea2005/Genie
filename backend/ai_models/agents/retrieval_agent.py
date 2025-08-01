@@ -145,7 +145,7 @@ class RetrievalAgent(BaseAgent):
             return {
                 "methods": ["vector", "bm25", "web"],
                 "weights": {"vector": 0.5, "bm25": 0.3, "web": 0.2},
-                "top_k": 8,
+                "top_k": 15,  # Increased from 8 to allow more sources
                 "skip_rerank": False,
                 "max_entities": 0,  # No graph for emotional queries
                 "query_type": "emotional"
@@ -157,7 +157,7 @@ class RetrievalAgent(BaseAgent):
             return {
                 "methods": ["web", "graph"],
                 "weights": {"web": 0.7, "graph": 0.3},
-                "top_k": 8,
+                "top_k": 15,  # Increased from 8 to allow more sources
                 "skip_rerank": False,
                 "max_entities": 2,  # Enable graph with 2 entities max
                 "hop_distance": 1,  # Single hop for performance
@@ -170,7 +170,7 @@ class RetrievalAgent(BaseAgent):
             return {
                 "methods": ["web"],
                 "weights": {"web": 1.0},
-                "top_k": 6,
+                "top_k": 12,  # Increased from 6 to allow more sources
                 "skip_rerank": False,
                 "max_entities": 0,  # No graph for practical queries
                 "query_type": "practical"
@@ -182,7 +182,7 @@ class RetrievalAgent(BaseAgent):
             return {
                 "methods": ["vector"],
                 "weights": {"vector": 1.0},
-                "top_k": 5,
+                "top_k": 10,  # Increased from 5 to allow more sources
                 "skip_rerank": True,
                 "max_entities": 0,
                 "query_type": "simple"
@@ -194,7 +194,7 @@ class RetrievalAgent(BaseAgent):
             return {
                 "methods": ["vector", "web", "graph"],
                 "weights": {"vector": 0.4, "web": 0.4, "graph": 0.2},
-                "top_k": 10,
+                "top_k": 20,  # Increased from 10 to allow more sources
                 "skip_rerank": False,
                 "max_entities": 1,  # Limited graph for complex queries
                 "hop_distance": 1,
@@ -331,7 +331,7 @@ class RetrievalAgent(BaseAgent):
             logger.error(f"BM25 search failed: {e}")
             return []
     
-    async def _graph_search_optimized(self, entity: str, top_k: int = 4, hop_distance: int = 1) -> List[Dict]:
+    async def _graph_search_optimized(self, entity: str, top_k: int = 8, hop_distance: int = 1) -> List[Dict]:  # Increased from 4 to 8
         """OPTIMIZED graph search for factual queries - balanced performance and quality"""
         try:
             results = await asyncio.wait_for(
@@ -353,11 +353,11 @@ class RetrievalAgent(BaseAgent):
             logger.warning(f"Optimized graph search failed for entity '{entity}': {e}")
             return []
     
-    async def _web_search_fast(self, query: str, max_results: int = 5) -> List[Dict]:
+    async def _web_search_fast(self, query: str, max_results: int = 10) -> List[Dict]:  # Increased from 5 to 10
         """FAST web search with aggressive timeout"""
         try:
             results = await asyncio.wait_for(
-                self.web_search.search(query, max_results=min(max_results, 5)),
+                self.web_search.search(query, max_results=min(max_results, 10)),  # Increased from 5 to 10
                 timeout=6  # REDUCED from 10 to 6 seconds
             )
             

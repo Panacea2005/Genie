@@ -46,12 +46,41 @@ class EmotionRecognitionService:
             
             # Test model loading
             logger.info("Validating emotion recognition model...")
-            # The model is already loaded in the emotion_recognition_model.model module
-            self.model_loaded = True
-            logger.info("Emotion recognition model validated successfully")
             
+            # Test if the model can be loaded and used
+            try:
+                from emotion_recognition_model.model import predict_emotion
+                # Create a simple test to verify the model works
+                import tempfile
+                import numpy as np
+                
+                # Create a minimal test audio file
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+                    # Generate 1 second of silence at 16kHz
+                    sample_rate = 16000
+                    duration = 1.0
+                    samples = np.zeros(int(sample_rate * duration))
+                    sf.write(tmp_file.name, samples, sample_rate)
+                    
+                    # Test the model
+                    results = predict_emotion(tmp_file.name, top_k=1)
+                    
+                    # Clean up
+                    try:
+                        os.unlink(tmp_file.name)
+                    except:
+                        pass
+                
+                self.model_loaded = True
+                logger.info("Emotion recognition model validated successfully")
+                
+            except Exception as model_error:
+                logger.error(f"Model validation failed: {model_error}")
+                self.model_loaded = False
+                
         except ImportError as e:
             logger.error(f"Missing dependencies for emotion recognition: {e}")
+            logger.info("To enable emotion recognition, install: pip install torch transformers librosa soundfile")
             self.model_loaded = False
         except Exception as e:
             logger.error(f"Failed to validate emotion recognition model: {e}")

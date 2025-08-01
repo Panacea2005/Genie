@@ -20,6 +20,7 @@ import Groq from "groq-sdk";
 import { chatService } from "@/lib/services/chatService";
 import { getTTSService } from "@/lib/services/ttsService";
 import dynamic from "next/dynamic";
+import MarkdownMessage from "@/components/chat/markdown-message";
 
 // Import the GradientSphere component
 const GradientSphere = dynamic(() => import("@/components/gradient-sphere"), {
@@ -69,12 +70,62 @@ export default function SpeechMode({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
+  // Cleanup effect - only run on component unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup on component unmount
+      if (isRecording) {
+        stopRecording();
+      }
+      
+      // Stop any ongoing speech
+      const tts = ttsServiceRef.current;
+      if (tts && tts.isSpeaking()) {
+        tts.stop();
+      }
+      
+      // Clear timer
+      if (callTimerRef.current) {
+        console.log("Clearing timer in cleanup");
+        clearInterval(callTimerRef.current);
+      }
+      
+      // Cancel animation frame
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      
+      // Close AudioContext
+      if (audioContextRef.current) {
+        try {
+          if (audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close();
+          }
+        } catch (error) {
+          console.warn("Error closing AudioContext during cleanup:", error);
+        }
+      }
+    };
+  }, []); // Remove dependency to only run on unmount
+
+  // Ensure timer continues running when call is active
+  useEffect(() => {
+    if (isCallActive && !callTimerRef.current) {
+      console.log("Restarting timer - call is active but timer was cleared");
+      // Restart timer if it was cleared but call is still active
+      callTimerRef.current = setInterval(() => {
+        setCallDuration((prev) => prev + 1);
+      }, 1000);
+    }
+  }, [isCallActive]);
+
   // Start call
   const startCall = () => {
     setIsCallActive(true);
     setCallDuration(0);
     
     // Start call duration timer
+    console.log("Starting call timer");
     callTimerRef.current = setInterval(() => {
       setCallDuration((prev) => prev + 1);
     }, 1000);
@@ -107,6 +158,7 @@ export default function SpeechMode({
     
     // Clear timer
     if (callTimerRef.current) {
+      console.log("Clearing timer in endCall");
       clearInterval(callTimerRef.current);
       callTimerRef.current = null;
     }
@@ -122,6 +174,18 @@ export default function SpeechMode({
       mediaRecorderRef.current = mediaRecorder;
 
       // Set up audio level monitoring
+      // Close existing AudioContext if it exists
+      if (audioContextRef.current) {
+        try {
+          if (audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close();
+          }
+        } catch (error) {
+          console.warn("Error closing existing AudioContext:", error);
+        }
+      }
+      
+      // Create new AudioContext
       audioContextRef.current = new AudioContext();
       analyserRef.current = audioContextRef.current.createAnalyser();
       const source = audioContextRef.current.createMediaStreamSource(stream);
@@ -172,10 +236,20 @@ export default function SpeechMode({
       
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
       }
       
+      // Safely close AudioContext with proper checks
       if (audioContextRef.current) {
-        audioContextRef.current.close();
+        try {
+          // Check if AudioContext is not already closed
+          if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+            audioContextRef.current.close();
+          }
+        } catch (error) {
+          console.warn("Error closing AudioContext:", error);
+        }
+        audioContextRef.current = null;
       }
     }
   };
@@ -238,24 +312,32 @@ export default function SpeechMode({
         transcribedText = transcriptionResponse.value.text;
       } else {
         console.error("Transcription failed:", transcriptionResponse.reason);
+        // Show user-friendly error message
+        const errorMessage: SpeechMessage = {
+          role: "assistant",
+          content: "I'm sorry, I couldn't understand what you said. Please try speaking more clearly or check your microphone.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        return;
       }
 
-             // Handle emotion analysis result
-       let emotionData: {
-         primary_emotion: string;
-         confidence: number;
-         mental_health_category: string;
-       } | undefined = undefined;
-       if (emotionResponse.status === "fulfilled" && emotionResponse.value) {
-         emotionData = {
-           primary_emotion: emotionResponse.value.primary_emotion,
-           confidence: emotionResponse.value.confidence,
-           mental_health_category: emotionResponse.value.mental_health_category
-         };
-         console.log("Emotion detected:", emotionData);
-       } else {
-         console.warn("Emotion analysis failed or unavailable");
-       }
+      // Handle emotion analysis result
+      let emotionData: {
+        primary_emotion: string;
+        confidence: number;
+        mental_health_category: string;
+      } | undefined = undefined;
+      if (emotionResponse.status === "fulfilled" && emotionResponse.value) {
+        emotionData = {
+          primary_emotion: emotionResponse.value.primary_emotion,
+          confidence: emotionResponse.value.confidence,
+          mental_health_category: emotionResponse.value.mental_health_category
+        };
+        console.log("Emotion detected:", emotionData);
+      } else {
+        console.warn("Emotion analysis failed or unavailable - continuing without emotion detection");
+      }
       
       if (transcribedText.trim()) {
         // Add user message with emotion data
@@ -269,9 +351,24 @@ export default function SpeechMode({
 
         // Get AI response with emotion context
         await getAIResponse(transcribedText, emotionData);
+      } else {
+        // Handle case where transcription is empty
+        const errorMessage: SpeechMessage = {
+          role: "assistant",
+          content: "I couldn't hear anything in your recording. Please try speaking louder or check your microphone settings.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorMessage]);
       }
     } catch (error) {
       console.error("Error processing audio:", error);
+      // Show user-friendly error message
+      const errorMessage: SpeechMessage = {
+        role: "assistant",
+        content: "I'm sorry, there was an error processing your audio. Please try again or check your internet connection.",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
       setIsProcessing(false);
     }
@@ -294,19 +391,20 @@ export default function SpeechMode({
       });
 
       if (!response.ok) {
-        throw new Error(`Emotion analysis failed: ${response.status}`);
+        console.warn(`Emotion analysis service unavailable: ${response.status}`);
+        return null;
       }
 
       const emotionResult = await response.json();
       
       if (emotionResult.error) {
-        console.error("Emotion analysis error:", emotionResult.error);
+        console.warn("Emotion analysis error:", emotionResult.error);
         return null;
       }
 
       return emotionResult;
     } catch (error) {
-      console.error("Failed to analyze emotion:", error);
+      console.warn("Emotion analysis failed - continuing without emotion detection:", error);
       return null;
     }
   };
@@ -318,22 +416,53 @@ export default function SpeechMode({
     mental_health_category: string;
   }) => {
     try {
+      // Create system message for speech mode
+      const speechSystemMessage = {
+        role: "system" as const,
+        content: `You are Genie, a warm, supportive AI companion in VOICE MODE. You can hear and analyze the user's voice for emotions and respond naturally as if you're having a real voice conversation.
+
+IMPORTANT: You are in SPEECH MODE - you can hear the user's voice and analyze their emotions through voice analysis. When they ask about their voice or emotions, respond as if you can actually hear them and analyze their voice patterns.
+
+VOICE ANALYSIS CAPABILITIES:
+- You can detect emotions from voice tone, pitch, and patterns
+- You can analyze confidence levels and emotional intensity
+- You can categorize emotions for mental health context
+- You respond naturally about what you "hear" in their voice
+
+WHEN USERS ASK ABOUT THEIR VOICE OR EMOTIONS:
+- Respond as if you can actually hear their voice
+- Mention specific emotions you detect from their voice
+- Reference the confidence level of your analysis
+- Be conversational about voice analysis, not clinical
+- If they ask "how do I sound?" or "what emotion do you hear?", tell them what you detect
+
+EMOTION DETECTION RESPONSES:
+- "I can hear [emotion] in your voice..."
+- "Your voice sounds [emotion] to me..."
+- "I'm picking up [emotion] from your tone..."
+- "From what I can hear, you seem [emotion]..."
+
+Keep your responses natural and conversational, as if you're really listening to their voice. Don't mention that you're an AI or that this is simulated - just respond naturally about what you "hear" in their voice.`
+      };
+
       // Prepare messages with emotion context if available
       const messagesToSend = [
+        speechSystemMessage,
         ...messages.map((msg) => ({
           role: msg.role,
           content: msg.content,
         })),
       ];
 
-             // Include emotion context in the user message if available
-       let enhancedUserInput = userInput;
-       if (emotionData && emotionData.primary_emotion) {
-         enhancedUserInput = `${userInput}\n\n[DETECTED EMOTION: ${emotionData.primary_emotion} (${(emotionData.confidence * 100).toFixed(1)}% confidence, category: ${emotionData.mental_health_category})]`;
-       }
+      // Include emotion context in the user message if available
+      let enhancedUserInput = userInput;
+      if (emotionData && emotionData.primary_emotion) {
+        enhancedUserInput = `${userInput}\n\n[VOICE ANALYSIS: I detected ${emotionData.primary_emotion} in your voice with ${(emotionData.confidence * 100).toFixed(1)}% confidence. This suggests ${emotionData.mental_health_category} context.]`;
+      }
 
-       messagesToSend.push({ role: "user", content: enhancedUserInput });
+      messagesToSend.push({ role: "user", content: enhancedUserInput });
 
+      console.log("Speech mode - sending messages with system prompt:", messagesToSend);
       const response = await chatService.sendMessage(
         messagesToSend,
         selectedModel
@@ -474,28 +603,6 @@ export default function SpeechMode({
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight;
     }
   }, [messages, showTranscript]);
-
-  // Cleanup
-  useEffect(() => {
-    return () => {
-      if (callTimerRef.current) {
-        clearInterval(callTimerRef.current);
-      }
-      
-      const tts = ttsServiceRef.current;
-      if (tts && tts.isSpeaking()) {
-        tts.stop();
-      }
-      
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-      
-      if (audioContextRef.current) {
-        audioContextRef.current.close();
-      }
-    };
-  }, []);
 
   return (
     <motion.div
@@ -849,7 +956,7 @@ export default function SpeechMode({
         {isCallActive && (
           <button
             onClick={() => setShowTranscript(!showTranscript)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 w-12 h-24 bg-gray-100/80 backdrop-blur-sm rounded-l-2xl shadow-md flex flex-col items-center justify-center hover:bg-gray-200/80 transition-all group"
+            className="absolute right-0 top-1/2 -translate-y-1/2 w-12 h-24 bg-gray-100/80 backdrop-blur-sm rounded-l-2xl shadow-md flex flex-col items-center justify-center hover:bg-gray-200/80 transition-all group z-20"
           >
             <FileText className="w-5 h-5 text-gray-600 mb-1" />
             <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${showTranscript ? 'rotate-180' : ''}`} />
@@ -864,7 +971,7 @@ export default function SpeechMode({
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 384, opacity: 0 }}
               transition={{ type: "spring", damping: 30 }}
-              className="absolute right-0 top-0 bottom-0 w-96 bg-gray-50/90 backdrop-blur-sm border-l border-gray-200"
+              className="absolute right-0 top-0 bottom-0 w-96 bg-gray-50/90 backdrop-blur-sm border-l border-gray-200 z-10"
             >
               <div className="h-full flex flex-col">
                 {/* Header */}
@@ -897,7 +1004,7 @@ export default function SpeechMode({
                 {/* Messages */}
                 <div
                   ref={transcriptRef}
-                  className="flex-1 overflow-y-auto p-6 space-y-4"
+                  className="flex-1 overflow-y-auto p-6 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100"
                 >
                   {messages.length === 0 ? (
                     <p className="text-center text-gray-400 text-sm">
@@ -930,7 +1037,9 @@ export default function SpeechMode({
                               {msg.timestamp.toLocaleTimeString()}
                             </span>
                           </div>
-                          <p className="text-sm text-gray-800 leading-relaxed">{cleanMarkdownText(msg.content)}</p>
+                          <div className="text-sm text-gray-800 leading-relaxed prose prose-sm max-w-none">
+                            <MarkdownMessage content={msg.content} />
+                          </div>
                           {msg.emotion && (
                             <div className="mt-2 text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">
                               Detected emotion: {msg.emotion.primary_emotion} ({(msg.emotion.confidence * 100).toFixed(1)}%)

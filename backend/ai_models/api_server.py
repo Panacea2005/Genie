@@ -199,9 +199,11 @@ async def chat_endpoint(request: ChatRequest):
             # Map frontend model IDs to backend preferences
             model_mapping = {
                 "groq": "groq",
-                "local": "local"
+                "local": "groq",  # Both use Groq but with different models
+                "llama3-70b-8192": "groq",
+                "meta-llama/llama-4-maverick-17b-128e-instruct": "groq"
             }
-            model_preference = model_mapping.get(request.model, request.model)
+            model_preference = model_mapping.get(request.model, "groq")
         
         logger.info(f"Using model preference: {model_preference}")
         
@@ -214,6 +216,15 @@ async def chat_endpoint(request: ChatRequest):
         
         # Enhance context with emotion information for better responses
         enhanced_context = request.context.copy() if request.context else {}
+        
+        # Add specific model information if provided
+        if request.context and 'actual_model_id' in request.context:
+            actual_model = request.context['actual_model_id']
+            if actual_model == "meta-llama/llama-4-maverick-17b-128e-instruct":
+                # For Solace, use local preference to trigger the Llama-4 model
+                model_preference = "local"
+                enhanced_context['specific_groq_model'] = "meta-llama/llama-4-maverick-17b-128e-instruct"
+        
         if emotion_context:
             enhanced_context['detected_emotion'] = emotion_context
             
@@ -227,6 +238,13 @@ async def chat_endpoint(request: ChatRequest):
         conversation_history = None
         if request.context and 'conversation_history' in request.context:
             conversation_history = request.context['conversation_history']
+            # Debug: Check for system messages in conversation history
+            if conversation_history:
+                system_messages = [msg for msg in conversation_history if msg.get('role') == 'system']
+                if system_messages:
+                    logger.info(f"Found {len(system_messages)} system messages in conversation history")
+                    for i, sys_msg in enumerate(system_messages):
+                        logger.info(f"System message {i+1}: {sys_msg.get('content', '')[:100]}...")
 
         # Process the query with model preference and enhanced context
         response_data = await genie_ai.chat(
@@ -364,25 +382,44 @@ async def analyze_emotion(request: EmotionAnalysisRequest):
         
         # Check if emotion service is available
         if not emotion_service or not emotion_service.is_available():
-            logger.error("Emotion recognition service not available")
-            raise HTTPException(
-                status_code=503, 
-                detail="Emotion recognition service not available"
+            logger.warning("Emotion recognition service not available - returning error response")
+            processing_time = (datetime.now() - start_time).total_seconds()
+            return EmotionAnalysisResponse(
+                emotions=[],
+                primary_emotion=None,
+                confidence=0.0,
+                mental_health_category="unknown",
+                session_id=request.session_id,
+                processing_time=processing_time,
+                error="Emotion recognition service not available. Please check if the required dependencies are installed (torch, transformers, librosa, soundfile)."
             )
         
         logger.info(f"Processing emotion analysis request for session {request.session_id}")
         
         # Analyze emotion from base64 audio data
-        if request.audio_format.lower() == "webm":
-            # Decode base64 to bytes for WebM processing
-            audio_bytes = base64.b64decode(request.audio_data)
-            emotion_results = emotion_service.analyze_emotion_from_webm(
-                audio_bytes, top_k=request.top_emotions
-            )
-        else:
-            # Use base64 analysis for other formats
-            emotion_results = emotion_service.analyze_emotion_from_base64(
-                request.audio_data, top_k=request.top_emotions
+        try:
+            if request.audio_format.lower() == "webm":
+                # Decode base64 to bytes for WebM processing
+                audio_bytes = base64.b64decode(request.audio_data)
+                emotion_results = emotion_service.analyze_emotion_from_webm(
+                    audio_bytes, top_k=request.top_emotions
+                )
+            else:
+                # Use base64 analysis for other formats
+                emotion_results = emotion_service.analyze_emotion_from_base64(
+                    request.audio_data, top_k=request.top_emotions
+                )
+        except Exception as analysis_error:
+            logger.error(f"Emotion analysis processing error: {analysis_error}")
+            processing_time = (datetime.now() - start_time).total_seconds()
+            return EmotionAnalysisResponse(
+                emotions=[],
+                primary_emotion=None,
+                confidence=0.0,
+                mental_health_category="unknown",
+                session_id=request.session_id,
+                processing_time=processing_time,
+                error=f"Emotion analysis processing failed: {str(analysis_error)}"
             )
         
         # Calculate processing time
@@ -425,7 +462,7 @@ async def analyze_emotion(request: EmotionAnalysisRequest):
             mental_health_category="unknown",
             session_id=request.session_id,
             processing_time=processing_time,
-            error=str(e)
+            error=f"Unexpected error in emotion analysis: {str(e)}"
         )
 
 async def rebuild_indexes_task():

@@ -114,7 +114,7 @@ class ConfidenceScorer:
         
         source_scores = []
         
-        for result in verified_results[:5]:  # Top 5 results
+        for result in verified_results:  # Remove limit to consider all sources
             source_type = result.get("source", "unknown")
             base_weight = self.config.source_confidence_weights.get(source_type, 0.5)
             
@@ -138,7 +138,7 @@ class ConfidenceScorer:
             return 0.3
         
         relevance_scores = []
-        for result in verified_results[:5]:
+        for result in verified_results:  # Remove limit to consider all sources
             relevance = result.get("relevance_score", 0.5)
             confidence = result.get("final_confidence", 0.5)
             combined = (relevance * 0.6) + (confidence * 0.4)

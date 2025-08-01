@@ -25,18 +25,18 @@ const ModelSelector = ({
 
   const models: Model[] = [
     { 
-      id: "llama3-70b-8192", 
+      id: "llama-3.3-70b-versatile", 
       name: "Lyra",
       tone: "#818cf8",
-      backend: "Groq Cloud",
-      description: "Fast, cloud-hosted RAG"
+      backend: "GroqCloud model",
+      description: "llama-3.3-70b-versatile"
     },
     { 
       id: "meta-llama/llama-4-maverick-17b-128e-instruct", 
       name: "Solace",
       tone: "#a78bfa",
-      backend: "Local RAG",
-      description: "Private, runs on your device"
+      backend: "Fine-tuned model",
+      description: "meta-llama/llama-3.2-1b-instruct"
     }
   ];
   

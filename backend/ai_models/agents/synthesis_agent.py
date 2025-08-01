@@ -329,11 +329,18 @@ class SynthesisAgent(BaseAgent):
         # Use enhanced prompt for longer responses
         sources_text = self._format_sources_for_llm_comprehensive(web_sources)
         history_text = self.format_history_for_prompt(conversation_history)
-        # Enhanced system prompt for Genie
+        
+        # Enhanced system prompt for Genie with emotion context
+        emotion_context = ""
+        if query_analysis and 'detected_emotion' in query_analysis:
+            emotion_data = query_analysis['detected_emotion']
+            if emotion_data and emotion_data.get('primary_emotion'):
+                emotion_context = f"\n\nEMOTION CONTEXT: I detected {emotion_data['primary_emotion']} in the user's voice with {(emotion_data.get('confidence', 0) * 100):.1f}% confidence. This suggests {emotion_data.get('mental_health_category', 'unknown')} context. Use this information to provide more empathetic and targeted support."
+        
         system_prompt = (
             "You are Genie, a warm, empathetic, and knowledgeable mental health assistant. "
             "Always answer user questions directly, clearly, and with emotional support. "
-            "Use markdown formatting for clarity."
+            "Use markdown formatting for clarity." + emotion_context
         )
         prompt = f"[INST] <<SYS>>{system_prompt}<</SYS>>\n{history_text}\n\nYour friend asked: \"{query}\"\n\nHere's some helpful info I found:\n{sources_text}\n\nChat with them naturally (150-250 words) like a knowledgeable friend who wants to help:\n- Answer their question in a friendly, easy-to-understand way\n- Use the information naturally in conversation\n- Sound like you're actually talking (\"You know what's interesting...\" \"One thing I've learned...\")\n- Share examples and explanations that feel natural\n- Keep it warm, helpful, and conversational\n- Don't mention sources or research - just share what you know\n- **Use rich markdown formatting**: **bold** for key points, *italics* for interesting insights, • bullet lists for clarity, and ### subheadings if organizing complex info\n\nHave a natural, beautifully formatted conversation:"
         try:
@@ -378,11 +385,17 @@ class SynthesisAgent(BaseAgent):
         sources_text = self._format_sources_for_llm_comprehensive(web_sources)
         history_text = self.format_history_for_prompt(conversation_history)
         
-        # Enhanced system prompt for Genie
+        # Enhanced system prompt for Genie with emotion context
+        emotion_context = ""
+        if query_analysis and 'detected_emotion' in query_analysis:
+            emotion_data = query_analysis['detected_emotion']
+            if emotion_data and emotion_data.get('primary_emotion'):
+                emotion_context = f"\n\nEMOTION CONTEXT: I detected {emotion_data['primary_emotion']} in the user's voice with {(emotion_data.get('confidence', 0) * 100):.1f}% confidence. This suggests {emotion_data.get('mental_health_category', 'unknown')} context. Use this information to provide more empathetic and targeted support."
+        
         system_prompt = (
             "You are Genie, a warm, empathetic, and knowledgeable mental health assistant. "
             "Always answer user questions directly, clearly, and with emotional support. "
-            "Use markdown formatting for clarity."
+            "Use markdown formatting for clarity." + emotion_context
         )
         prompt = f"[INST] <<SYS>>{system_prompt}<</SYS>>\n{history_text}\n\nYour friend asked: \"{query}\" and they need some practical help.\n\nHere's some useful info I found:\n{sources_text}\n\nGive them helpful advice (150-250 words) like a supportive friend would:\n- Share clear, doable steps they can actually try\n- Talk naturally (\"Here's what I'd suggest...\" \"One thing that really helps...\")\n- Make it practical and friendly, not overwhelming\n- Include encouragement and realistic expectations\n- Mention professional help if it seems like a good idea\n- Sound like you're helping a friend, not giving a lecture\n- Don't mention sources or studies - just share helpful advice\n- **Use clear formatting**: **bold** for key advice, • numbered/bullet lists for step-by-step guidance, *italics* for encouragement\n\nGive warm, well-organized practical advice:"
 
@@ -526,7 +539,7 @@ class SynthesisAgent(BaseAgent):
     def _format_sources_for_llm_clean(self, sources: List[Dict]) -> str:
         """Format sources for LLM without confusing instructions"""
         sources_text = ""
-        for i, source in enumerate(sources[:3], 1):
+        for i, source in enumerate(sources, 1):  # Remove limit to use all sources
             content = source.get('text', '').strip()
             if content:
                 # Clean content and limit length
@@ -787,7 +800,7 @@ class SynthesisAgent(BaseAgent):
     def _format_sources_for_llm_comprehensive(self, sources: List[Dict]) -> str:
         """Format sources comprehensively for longer responses"""
         sources_text = ""
-        for i, source in enumerate(sources[:4], 1):  # Use up to 4 sources for more comprehensive responses
+        for i, source in enumerate(sources, 1):  # Remove limit to use all sources
             content = source.get('text', '').strip()
             if content:
                 # Use more content for comprehensive responses
@@ -805,7 +818,7 @@ class SynthesisAgent(BaseAgent):
         
         # Add relevant information from sources
         additional_info = []
-        for source in sources[:3]:
+        for source in sources:  # Remove limit to use all sources
             content = source.get('text', '').strip()
             if content:
                 # Find sentences with informative content
@@ -877,7 +890,7 @@ Consider reaching out to a counselor, therapist, or your healthcare provider who
         research_findings = []
         practical_applications = []
         
-        for source in sources[:4]:  # Use more sources for comprehensive response
+        for source in sources:  # Remove limit to use all sources
             content = source.get('text', '').strip()
             if not content:
                 continue
@@ -939,7 +952,7 @@ Consider reaching out to a counselor, therapist, or your healthcare provider who
         techniques = []
         tips = []
         
-        for source in sources[:4]:  # Use more sources for comprehensive response
+        for source in sources:  # Remove limit to use all sources
             content = source.get('text', '').strip()
             if not content:
                 continue
@@ -985,7 +998,7 @@ Consider reaching out to a counselor, therapist, or your healthcare provider who
     def _format_sources(self, verified_results: List[Dict]) -> List[Dict]:
         """Format sources for response output"""
         sources = []
-        for i, result in enumerate(verified_results[:10], 1):  # Limit to top 10 sources
+        for i, result in enumerate(verified_results, 1):  # Remove limit to show all sources
             source_info = {
                 "id": i,
                 "text": result.get("text", "")[:200] + "..." if len(result.get("text", "")) > 200 else result.get("text", ""),
@@ -1009,7 +1022,7 @@ Consider reaching out to a counselor, therapist, or your healthcare provider who
             return response
         
         citation_text = ""
-        for i, source in enumerate(sources[:5], 1):
+        for i, source in enumerate(sources, 1):  # Remove limit to show all sources
             source_type = source.get("source", "")
             metadata = source.get("metadata", {})
             
@@ -1127,7 +1140,7 @@ Consider reaching out to a mental health professional, your healthcare provider,
         
         # Look for emotional content in sources
         supportive_content = []
-        for source in sources[:2]:
+        for source in sources:  # Remove limit to use all sources
             content = source.get('text', '').strip()
             if any(word in content.lower() for word in ['feel', 'emotion', 'support', 'understand', 'help']):
                 if len(content) > 100:
@@ -1152,7 +1165,7 @@ Consider reaching out to a trusted friend, family member, or mental health profe
     def _format_sources_for_llm(self, verified_results: List[Dict]) -> str:
         """Format sources for LLM prompt"""
         formatted = []
-        for i, result in enumerate(verified_results[:5], 1):  # Limit to top 5 for LLM
+        for i, result in enumerate(verified_results, 1):  # Remove limit to use all sources
             text = result.get("text", "")
             source_type = result.get("source", "knowledge_base")
             score = result.get("score", 0.5)
@@ -1168,7 +1181,7 @@ Consider reaching out to a trusted friend, family member, or mental health profe
             return response
         
         citation_text = ""
-        for i, source in enumerate(sources[:5], 1):
+        for i, source in enumerate(sources, 1):  # Remove limit to show all sources
             source_type = source.get("source", "")
             metadata = source.get("metadata", {})
             
