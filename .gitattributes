@@ -1,18 +1,29 @@
-# Git LFS configuration for large files
-*.zip filter=lfs diff=lfs merge=lfs -text
-*.safetensors filter=lfs diff=lfs merge=lfs -text
-*.bin filter=lfs diff=lfs merge=lfs -text
-*.pkl filter=lfs diff=lfs merge=lfs -text
-*.faiss filter=lfs diff=lfs merge=lfs -text
-*.model filter=lfs diff=lfs merge=lfs -text
-*.mp3 filter=lfs diff=lfs merge=lfs -text
-*.wav filter=lfs diff=lfs merge=lfs -text
-*.webm filter=lfs diff=lfs merge=lfs -text
-*.log filter=lfs diff=lfs merge=lfs -text
-*.csv filter=lfs diff=lfs merge=lfs -text
-*.json filter=lfs diff=lfs merge=lfs -text
+# Ensure package.json is not tracked by Git LFS
+package.json -filter -diff -merge
+package-lock.json -filter -diff -merge
+pnpm-lock.yaml -filter -diff -merge
+
+# Allow Git LFS for large files
 *.png filter=lfs diff=lfs merge=lfs -text
 *.jpg filter=lfs diff=lfs merge=lfs -text
 *.jpeg filter=lfs diff=lfs merge=lfs -text
-*.webp filter=lfs diff=lfs merge=lfs -text
-*.avif filter=lfs diff=lfs merge=lfs -text 
+*.gif filter=lfs diff=lfs merge=lfs -text
+*.mp4 filter=lfs diff=lfs merge=lfs -text
+*.mp3 filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+*.pdf filter=lfs diff=lfs merge=lfs -text
+*.zip filter=lfs diff=lfs merge=lfs -text
+*.tar.gz filter=lfs diff=lfs merge=lfs -text
+
+# Ensure these files are always text
+*.json text
+*.js text
+*.ts text
+*.tsx text
+*.css text
+*.scss text
+*.html text
+*.md text
+*.txt text
+*.yml text
+*.yaml text
