@@ -1,91 +1,60 @@
-// File: app/api/transcribe/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import Groq from 'groq-sdk';
 
-// Initialize the Groq client
-const groq = new Groq({
-  apiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || "",
-  dangerouslyAllowBrowser: false, // Set to false for server-side
-});
-
-export async function POST(req: NextRequest) {
-  console.log('Transcribe API route called');
-  
+export async function POST(request: NextRequest) {
   try {
-    const { audio, model = "whisper-large-v3-turbo" } = await req.json();
-
-    if (!audio) {
-      console.error('No audio data provided');
-      return NextResponse.json(
-        { error: "No audio data provided" },
-        { status: 400 }
-      );
-    }
-
-    console.log('Audio data received, length:', audio.length);
+    const formData = await request.formData();
+    const audioFile = formData.get('audio') as File;
     
-    // FALLBACK APPROACH - If you want to test without calling Groq
-    // Uncomment this code to return a mock response
-    /*
-    console.log('Returning mock response');
-    return NextResponse.json({ 
-      text: "This is a mock transcription. Replace this with the actual API call." 
-    });
-    */
-    
-    try {
-      // Convert base64 to binary
-      const binaryData = Buffer.from(audio, 'base64');
-      
-      // Create File object manually for Node.js environment
-      const file = {
-        buffer: binaryData,
-        name: 'audio.webm',
-        type: 'audio/webm',
-      };
-      
-      console.log('Calling Groq API...');
-      
-      // Call Groq API to transcribe audio
-      const response = await groq.audio.transcriptions.create({
-        model,
-        file: file as any,
-        language: "en",
-        response_format: "text",
-      });
-      
-      console.log('Groq API response received:', response);
-      
-      if (!response || !response.text) {
-        console.error('Invalid response from Groq API');
-        return NextResponse.json(
-          { error: "Invalid response from transcription service" },
-          { status: 500 }
-        );
-      }
-      
-      // Return the transcribed text
-      return NextResponse.json({ text: response.text });
-      
-    } catch (groqError: any) {
-      console.error("Error calling Groq API:", groqError);
-      
-      // Return a detailed error response
+    if (!audioFile) {
       return NextResponse.json({ 
-        error: "Transcription service error", 
-        details: groqError.message || "Unknown error",
-        fallbackText: "Voice transcription failed. Please try typing your message."
-      }, { status: 500 });
+        error: 'No audio file provided' 
+      }, { status: 400 });
     }
+
+    // Validate file type
+    if (!audioFile.type.startsWith('audio/')) {
+      return NextResponse.json({ 
+        error: 'File must be an audio file' 
+      }, { status: 400 });
+    }
+
+    // Create new FormData for Groq API
+    const groqFormData = new FormData();
+    groqFormData.append('file', audioFile);
+    groqFormData.append('model', 'whisper-large-v3');
+    groqFormData.append('language', 'en');
+
+    // Call Groq API for transcription
+    const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: groqFormData,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('Transcription API error:', response.status, errorData);
+      throw new Error(`Transcription API error: ${response.status}`);
+    }
+
+    const data = await response.json();
     
-  } catch (error: any) {
-    console.error("Error processing request:", error);
+    return NextResponse.json({
+      text: data.text,
+      confidence: 0.9,
+      language: 'en',
+      duration: audioFile.size / 16000 // Rough estimate
+    });
+
+  } catch (error) {
+    console.error('Transcription error:', error);
     return NextResponse.json(
       { 
-        error: "Failed to process request",
-        details: error.message || "Unknown error",
-        fallbackText: "Voice transcription failed. Please try typing your message." 
-      },
+        error: 'Transcription failed',
+        details: error instanceof Error ? error.message : 'Unknown error'
+      }, 
       { status: 500 }
     );
   }
