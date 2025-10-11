@@ -1,29 +1,32 @@
 # Genie AI - Intelligent Mental Health Companion
 
 <div align="center">
+<img src="public/images/flower-pattern.png" alt="Genie AI Logo" width="120" height="120">
 
 ![Next.js](https://img.shields.io/badge/Next.js-15.2.4-black?style=for-the-badge&logo=next.js)
 ![Python](https://img.shields.io/badge/Python-3.9+-blue?style=for-the-badge&logo=python)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue?style=for-the-badge&logo=typescript)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green?style=for-the-badge&logo=fastapi)
+![Supabase](https://img.shields.io/badge/Supabase-Database-orange?style=for-the-badge&logo=supabase)
 
 *A sophisticated AI-powered mental health support system combining advanced RAG capabilities with empathetic conversational AI*
 
-[🚀 Quick Start](#quick-start) • [🏗️ Architecture](#architecture) • [✨ Features](#features) • [🔧 Setup](#setup) • [📚 Documentation](#documentation) • [🤝 Contributing](#contributing)
+[Quick Start](#quick-start) • [Architecture](#architecture) • [Features](#features) • [Setup](#setup) • [Documentation](#documentation) • [Contributing](#contributing)
 
 </div>
 
 ---
 
-## 🌟 Overview
+## Overview
 
 Genie AI is a comprehensive mental health support system that leverages cutting-edge AI technology to provide empathetic, intelligent, and personalized assistance. Built with a modern Next.js frontend and a sophisticated Python backend featuring advanced RAG (Retrieval-Augmented Generation) capabilities, Genie offers a seamless experience for users seeking mental health guidance and support.
 
-### 🎯 Mission
+### Mission
 To provide accessible, intelligent, and empathetic mental health support through AI technology, helping users navigate life's challenges with understanding and care.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ### Frontend Stack
 - **Framework**: Next.js 15.2.4 with TypeScript
@@ -52,37 +55,37 @@ To provide accessible, intelligent, and empathetic mental health support through
 
 ---
 
-## ✨ Features
+## Features
 
-### 🤖 Advanced AI Capabilities
+### Advanced AI Capabilities
 - **Multi-Agent RAG System**: Sophisticated retrieval and synthesis
 - **Emotion Recognition**: Audio-based emotion detection
 - **Voice Interaction**: Speech-to-text with Whisper integration
 - **Contextual Memory**: Long-term conversation memory
 - **Personalization**: User-specific adaptation and learning
 
-### 🔍 Intelligent Information Retrieval
+### Intelligent Information Retrieval
 - **Vector Search**: Semantic similarity with FAISS
 - **BM25 Search**: Keyword-based retrieval
 - **Knowledge Graph**: Entity relationship exploration
 - **Web Search**: Real-time information gathering
 - **Hybrid Retrieval**: Multi-method result fusion
 
-### 💬 Conversational Excellence
+### Conversational Excellence
 - **Empathetic Responses**: Emotion-aware communication
 - **Citation System**: Transparent source attribution
 - **Confidence Scoring**: Quality assessment for responses
 - **Fallback Mechanisms**: Robust error handling
 - **Multi-modal Support**: Text, voice, and visual interaction
 
-### 🛡️ Safety & Privacy
+### Safety & Privacy
 - **Content Moderation**: Safety filtering and validation
 - **Privacy Protection**: Secure data handling
 - **Professional Disclaimers**: Appropriate medical disclaimers
 - **Crisis Detection**: Emergency situation recognition
 - **Secure Authentication**: Supabase-based user management
 
-### 📊 Wellness Tracking
+### Wellness Tracking
 - **Emotion Tracking**: Mood and emotional state monitoring
 - **Progress Analytics**: User journey visualization
 - **Resource Library**: Curated mental health resources
@@ -91,7 +94,7 @@ To provide accessible, intelligent, and empathetic mental health support through
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - **Node.js** 18+ and npm/pnpm
@@ -156,7 +159,7 @@ npm run dev
 
 ---
 
-## 🔧 Configuration
+## Configuration
 
 ### Environment Variables
 Create `.env.local` in the root directory:
@@ -192,7 +195,7 @@ final_top_k = 20
 
 ---
 
-## 📚 Documentation
+## Documentation
 
 ### System Architecture
 ```
@@ -255,7 +258,7 @@ python test_models.py
 
 ---
 
-## 🎯 Use Cases
+## Use Cases
 
 ### Mental Health Support
 - **Emotional Support**: Empathetic responses to difficult situations
@@ -277,7 +280,7 @@ python test_models.py
 
 ---
 
-## 🔍 Advanced Features
+## Advanced Features
 
 ### Multi-Agent RAG System
 The system employs a sophisticated multi-agent architecture:
@@ -302,7 +305,7 @@ The system employs a sophisticated multi-agent architecture:
 
 ---
 
-## 🛠️ Development
+## Development
 
 ### Project Structure
 ```
@@ -338,7 +341,7 @@ genie/
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
 ### Frontend Deployment
 Deploy to Vercel, Netlify, or similar platforms:
@@ -379,16 +382,16 @@ CMD ["python", "api_server.py"]
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions from the community! Here's how you can help:
 
 ### Ways to Contribute
-- 🐛 **Bug Reports**: Help identify and fix issues
-- 💡 **Feature Requests**: Suggest new capabilities
-- 📚 **Documentation**: Improve guides and examples
-- 🧪 **Testing**: Enhance test coverage
-- 🔧 **Code**: Implement features and optimizations
+- **Bug Reports**: Help identify and fix issues
+- **Feature Requests**: Suggest new capabilities
+- **Documentation**: Improve guides and examples
+- **Testing**: Enhance test coverage
+- **Code**: Implement features and optimizations
 
 ### Development Setup
 1. Follow the [Quick Start](#quick-start) guide
@@ -399,13 +402,13 @@ We welcome contributions from the community! Here's how you can help:
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Groq**: For providing fast and reliable AI inference
 - **Supabase**: For authentication and database services
@@ -417,7 +420,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 <div align="center">
 
-**Made with ❤️ for mental health support**
+**Made with care for mental health support**
 
 *Genie AI - Your intelligent companion for mental wellness*
 

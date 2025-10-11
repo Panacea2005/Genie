@@ -1,0 +1,1 @@
+web: cd ai_models && python api_server.py
